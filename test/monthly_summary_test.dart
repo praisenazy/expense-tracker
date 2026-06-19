@@ -34,10 +34,9 @@ class _StubMonth extends SelectedMonthNotifier {
   DateTime build() => _month;
 }
 
-Category _cat(String id, TransactionType kind) => Category(
+Category _cat(String id) => Category(
       id: id,
       name: id,
-      kind: kind,
       iconCodePoint: 0xe000,
       colorValue: 0xFF000000,
     );
@@ -61,9 +60,9 @@ Transaction _tx({
 void main() {
   test('summary totals only the selected month and groups expenses', () {
     final categories = [
-      _cat('food', TransactionType.expense),
-      _cat('transport', TransactionType.expense),
-      _cat('salary', TransactionType.income),
+      _cat('food'),
+      _cat('transport'),
+      _cat('salary'),
     ];
 
     final transactions = [

@@ -3,12 +3,12 @@ import 'package:hive_ce/hive.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_icons.dart';
-import 'transaction_type.dart';
 
 part 'category.g.dart';
 
-/// A spending or income category — now editable DATA stored in Hive
-/// (not a hardcoded enum), so users can rename, restyle, add, and delete them.
+/// A category — editable DATA stored in Hive (not a hardcoded enum), so users
+/// can rename, restyle, add, and delete them. One shared set is used for both
+/// income and expense transactions.
 ///
 /// Icon and color are stored as their underlying numbers because Hive can't
 /// store IconData/Color objects directly; the getters rebuild them.
@@ -17,7 +17,6 @@ class Category {
   const Category({
     required this.id,
     required this.name,
-    required this.kind,
     required this.iconCodePoint,
     required this.colorValue,
   });
@@ -26,20 +25,16 @@ class Category {
   @HiveField(0)
   final String id;
 
-  /// Editable display name, e.g. "Salary" or "Food".
+  /// Editable display name, e.g. "Food".
   @HiveField(1)
   final String name;
 
-  /// Whether this category is for income or expense.
-  @HiveField(2)
-  final TransactionType kind;
-
   /// The chosen icon's codePoint (rebuilt via AppIcons).
-  @HiveField(3)
+  @HiveField(2)
   final int iconCodePoint;
 
   /// The chosen color as an int (rebuilt via Color()).
-  @HiveField(4)
+  @HiveField(3)
   final int colorValue;
 
   /// The icon to display (kept valid by AppIcons' safelist).
@@ -51,14 +46,12 @@ class Category {
   Category copyWith({
     String? id,
     String? name,
-    TransactionType? kind,
     int? iconCodePoint,
     int? colorValue,
   }) {
     return Category(
       id: id ?? this.id,
       name: name ?? this.name,
-      kind: kind ?? this.kind,
       iconCodePoint: iconCodePoint ?? this.iconCodePoint,
       colorValue: colorValue ?? this.colorValue,
     );

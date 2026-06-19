@@ -83,14 +83,12 @@ class TypeToggle extends StatelessWidget {
                 children: [
                   _half(
                     label: 'Expense',
-                    icon: Icons.arrow_upward_rounded,
                     selected: isExpense,
                     mutedText: mutedText,
                     onTap: () => onChanged(TransactionType.expense),
                   ),
                   _half(
                     label: 'Income',
-                    icon: Icons.arrow_downward_rounded,
                     selected: !isExpense,
                     mutedText: mutedText,
                     onTap: () => onChanged(TransactionType.income),
@@ -106,7 +104,6 @@ class TypeToggle extends StatelessWidget {
 
   Widget _half({
     required String label,
-    required IconData icon,
     required bool selected,
     required Color mutedText,
     required VoidCallback onTap,
@@ -120,31 +117,16 @@ class TypeToggle extends StatelessWidget {
         child: SizedBox(
           height: _height - _inset * 2,
           child: Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Icon color cross-fades smoothly as the thumb slides.
-                AnimatedSwitcher(
-                  duration: _duration,
-                  child: Icon(
-                    icon,
-                    key: ValueKey(selected),
-                    size: 18,
-                    color: color,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                AnimatedDefaultTextStyle(
-                  duration: _duration,
-                  curve: _curve,
-                  style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                  ),
-                  child: Text(label),
-                ),
-              ],
+            // Text color cross-fades smoothly as the thumb slides.
+            child: AnimatedDefaultTextStyle(
+              duration: _duration,
+              curve: _curve,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+              ),
+              child: Text(label),
             ),
           ),
         ),

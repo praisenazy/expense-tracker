@@ -32,19 +32,21 @@ class AddEditTransactionScreen extends ConsumerStatefulWidget {
 
 class _AddEditTransactionScreenState
     extends ConsumerState<AddEditTransactionScreen> {
-  // Key used to trigger and read form validation.
+  // Accent colors that match the type toggle.
+  static const Color _expenseColor = Color(0xFFEF5350);
+  static const Color _incomeColor = Color(0xFF4285F4);
+
   final _formKey = GlobalKey<FormState>();
 
-  // Controllers hold the text typed into the fields.
   late final TextEditingController _amountController;
   late final TextEditingController _noteController;
 
-  // Local form state for the non-text inputs.
   late TransactionType _type;
   String? _categoryId; // selected category (by id)
   late DateTime _date;
 
   bool get _isEditing => widget.existing != null;
+  Color get _accent => _type.isIncome ? _incomeColor : _expenseColor;
 
   @override
   void initState() {
@@ -57,9 +59,7 @@ class _AddEditTransactionScreenState
     _noteController = TextEditingController(text: existing?.note ?? '');
     _type = existing?.type ?? TransactionType.expense;
     _date = existing?.date ?? DateTime.now();
-
-    // Pre-select the existing category, else the first one of this type.
-    _categoryId = existing?.categoryId ?? _firstCategoryIdFor(_type);
+    _categoryId = existing?.categoryId ?? _firstCategoryId();
   }
 
   @override
@@ -69,50 +69,37 @@ class _AddEditTransactionScreenState
     super.dispose();
   }
 
-  /// The first available category id for a kind, or null if none exist.
-  String? _firstCategoryIdFor(TransactionType kind) {
-    final list = ref.read(categoriesByKindProvider(kind));
+  /// The first available category id, or null if none exist.
+  String? _firstCategoryId() {
+    final list = ref.read(categoriesProvider);
     return list.isEmpty ? null : list.first.id;
   }
 
-  /// Keep the selection valid for the current type (e.g. after switching
-  /// income/expense, or returning from Manage Categories).
+  /// Keep the selection valid (e.g. after returning from the editor).
   void _ensureValidSelection() {
-    final validIds =
-        ref.read(categoriesByKindProvider(_type)).map((c) => c.id).toSet();
+    final validIds = ref.read(categoriesProvider).map((c) => c.id).toSet();
     if (_categoryId == null || !validIds.contains(_categoryId)) {
-      _categoryId = _firstCategoryIdFor(_type);
+      _categoryId = _firstCategoryId();
     }
   }
 
-  void _onTypeChanged(TransactionType newType) {
-    setState(() {
-      _type = newType;
-      _ensureValidSelection();
-    });
-  }
-
-  /// Opens the editor to create a brand-new category/source, then selects it.
-  ///
-  /// If this side already has the maximum number of categories, the user is
-  /// first asked to delete one they added to make room.
+  /// Opens the editor to create a new category, then selects it. If at the
+  /// limit, the user is first asked to delete one they added.
   Future<void> _openNewCategory() async {
-    final atLimit = ref.read(categoriesByKindProvider(_type)).length >=
-        AppConstants.maxCategoriesPerKind;
+    final atLimit =
+        ref.read(categoriesProvider).length >= AppConstants.maxCategories;
     if (atLimit) {
-      final madeRoom = await showCategoryLimitSheet(context, _type);
+      final madeRoom = await showCategoryLimitSheet(context);
       if (madeRoom != true || !mounted) return;
     }
 
     final created = await Navigator.of(context).push<Category>(
-      MaterialPageRoute(
-        builder: (_) => CategoryEditorScreen(kind: _type),
-      ),
+      MaterialPageRoute(builder: (_) => const CategoryEditorScreen()),
     );
     if (!mounted) return;
     setState(() {
       if (created != null) {
-        _categoryId = created.id; // auto-select the one just created
+        _categoryId = created.id;
       } else {
         _ensureValidSelection();
       }
@@ -132,7 +119,6 @@ class _AddEditTransactionScreenState
   }
 
   Future<void> _save() async {
-    // Run all field validators; stop if any fails.
     if (!_formKey.currentState!.validate()) return;
 
     if (_categoryId == null) {
@@ -146,8 +132,6 @@ class _AddEditTransactionScreenState
     final note = _noteController.text.trim();
 
     final transaction = Transaction(
-      // Keep the same id when editing so we update the right record;
-      // generate a new one when adding.
       id: widget.existing?.id ?? const Uuid().v4(),
       amount: amount,
       type: _type,
@@ -169,65 +153,154 @@ class _AddEditTransactionScreenState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Categories for the currently-selected side (income or expense).
-    final categories = ref.watch(categoriesByKindProvider(_type));
+    final isDark = theme.brightness == Brightness.dark;
+    final categories = ref.watch(categoriesProvider);
 
     return Scaffold(
+      backgroundColor: isDark ? null : const Color(0xFFF4F5FA),
       appBar: AppBar(
         title: Text(_isEditing ? 'Edit Transaction' : 'Add Transaction'),
+        // Light bar with dark title/icons.
+        backgroundColor: isDark ? null : Colors.white,
+        foregroundColor: theme.colorScheme.onSurface,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        // Thin iOS-style back chevron instead of the thick Android arrow.
+        leading: IconButton(
+          tooltip: 'Back',
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
       ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(AppConstants.spaceM),
+          padding: const EdgeInsets.all(AppConstants.spaceL),
           children: [
-            // ---- Income / Expense toggle ----
+            // ---- Income / Expense sliding toggle ----
             TypeToggle(
               value: _type,
-              onChanged: _onTypeChanged,
+              onChanged: (type) => setState(() => _type = type),
             ),
             const SizedBox(height: AppConstants.spaceL),
 
-            // ---- Amount ----
-            TextFormField(
-              controller: _amountController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              // Allow only digits and a single decimal point.
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-              ],
-              decoration: const InputDecoration(
-                labelText: 'Amount',
-                prefixText: '₦ ',
+            // ---- Amount (big, with wallet icon) ----
+            _Card(
+              isDark: isDark,
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: _accent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      Icons.account_balance_wallet_rounded,
+                      color: _accent,
+                    ),
+                  ),
+                  const SizedBox(width: AppConstants.spaceM),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Amount',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.onSurface
+                                .withValues(alpha: 0.6),
+                          ),
+                        ),
+                        TextFormField(
+                          controller: _amountController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'^\d*\.?\d{0,2}'),
+                            ),
+                          ],
+                          style: TextStyle(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w800,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            filled: false,
+                            hintText: '0.00',
+                            prefixText: '₦ ',
+                            prefixStyle: TextStyle(
+                              fontSize: 30,
+                              fontWeight: FontWeight.w800,
+                              color: _accent,
+                            ),
+                          ),
+                          validator: (value) {
+                            final text = value?.trim() ?? '';
+                            if (text.isEmpty) return 'Please enter an amount';
+                            final parsed = double.tryParse(text);
+                            if (parsed == null) return 'Enter a valid number';
+                            if (parsed <= 0) {
+                              return 'Amount must be greater than zero';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              validator: (value) {
-                final text = value?.trim() ?? '';
-                if (text.isEmpty) return 'Please enter an amount';
-                final parsed = double.tryParse(text);
-                if (parsed == null) return 'Enter a valid number';
-                if (parsed <= 0) return 'Amount must be greater than zero';
-                return null;
-              },
             ),
             const SizedBox(height: AppConstants.spaceM),
 
-            // ---- Note (the transaction's description; optional) ----
-            TextFormField(
-              controller: _noteController,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                hintText: 'Note something...',
+            // ---- Note (with note icon) ----
+            _Card(
+              isDark: isDark,
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.sticky_note_2_rounded,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
+                  const SizedBox(width: AppConstants.spaceM),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _noteController,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        filled: false,
+                        hintText: 'Note something...',
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: AppConstants.spaceL),
 
-            // ---- Category (income source or expense type) ----
-            Text(
-              _type.isIncome ? 'Source' : 'Category',
-              style: theme.textTheme.labelLarge,
+            // ---- Category ----
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: AppConstants.spaceS),
+              child: Text(
+                'Category',
+                style: theme.textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
             ),
-            const SizedBox(height: AppConstants.spaceS),
             CategoryPicker(
               categories: categories,
               selectedId: _categoryId,
@@ -237,26 +310,134 @@ class _AddEditTransactionScreenState
             const SizedBox(height: AppConstants.spaceL),
 
             // ---- Date ----
-            InkWell(
+            _Card(
+              isDark: isDark,
               onTap: _pickDate,
-              borderRadius: BorderRadius.circular(12),
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Date',
-                  prefixIcon: Icon(Icons.calendar_today_rounded),
-                ),
-                child: Text(Formatters.date(_date)),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.calendar_today_rounded,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
+                  const SizedBox(width: AppConstants.spaceM),
+                  Text(
+                    Formatters.date(_date),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const Spacer(),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: AppConstants.spaceXl),
 
-            // ---- Save ----
-            FilledButton.icon(
-              onPressed: _save,
-              icon: const Icon(Icons.check_rounded),
-              label: Text(_isEditing ? 'Save Changes' : 'Add Transaction'),
+            // ---- Save (vibrant gradient button) ----
+            _GradientButton(
+              accent: _accent,
+              label: _isEditing ? 'Save Changes' : 'Add Transaction',
+              onTap: _save,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A soft rounded card with a subtle shadow, used to group each field.
+class _Card extends StatelessWidget {
+  const _Card({required this.child, required this.isDark, this.onTap});
+
+  final Widget child;
+  final bool isDark;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final content = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppConstants.spaceM),
+      decoration: BoxDecoration(
+        color: isDark ? scheme.surfaceContainerHigh : Colors.white,
+        borderRadius: BorderRadius.circular(AppConstants.cardRadius),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+      ),
+      child: child,
+    );
+
+    if (onTap == null) return content;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppConstants.cardRadius),
+      child: content,
+    );
+  }
+}
+
+/// Full-width vibrant gradient button that matches the selected type color.
+class _GradientButton extends StatelessWidget {
+  const _GradientButton({
+    required this.accent,
+    required this.label,
+    required this.onTap,
+  });
+
+  final Color accent;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    // Slightly darker second stop for a richer gradient.
+    final darker = Color.lerp(accent, Colors.black, 0.18)!;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          height: 56,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(colors: [accent, darker]),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: accent.withValues(alpha: 0.4),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.check_rounded, color: Colors.white),
+                const SizedBox(width: AppConstants.spaceS),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

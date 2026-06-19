@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/default_categories.dart';
 import '../../../data/models/category.dart';
-import '../../../data/models/transaction_type.dart';
 import '../../../providers/category_providers.dart';
 import '../../../providers/transaction_providers.dart';
 
@@ -12,31 +11,25 @@ import '../../../providers/transaction_providers.dart';
 ///
 /// Returns true if the user deleted one of their categories (freeing a slot),
 /// so the caller can then continue to create a new one.
-Future<bool?> showCategoryLimitSheet(
-  BuildContext context,
-  TransactionType kind,
-) {
+Future<bool?> showCategoryLimitSheet(BuildContext context) {
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (_) => _CategoryLimitSheet(kind: kind),
+    builder: (_) => const _CategoryLimitSheet(),
   );
 }
 
 class _CategoryLimitSheet extends ConsumerWidget {
-  const _CategoryLimitSheet({required this.kind});
-
-  final TransactionType kind;
+  const _CategoryLimitSheet();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final noun = kind.isIncome ? 'sources' : 'categories';
 
     // Only the user's own categories can be deleted (not the built-in ones).
     final custom = ref
-        .watch(categoriesByKindProvider(kind))
+        .watch(categoriesProvider)
         .where((c) => !isDefaultCategory(c))
         .toList();
 
@@ -59,7 +52,7 @@ class _CategoryLimitSheet extends ConsumerWidget {
             ),
             const SizedBox(height: AppConstants.spaceS),
             Text(
-              'You can have up to ${AppConstants.maxCategoriesPerKind} $noun. '
+              'You can have up to ${AppConstants.maxCategories} categories. '
               'Delete one you added to make room for a new one.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.7),

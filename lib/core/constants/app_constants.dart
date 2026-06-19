@@ -29,7 +29,7 @@ class AppConstants {
 
   static const double cardRadius = 16;
 
-  /// Max categories allowed per side (income or expense). At this limit the
-  /// user must delete one they added before creating a new one.
-  static const int maxCategoriesPerKind = 12;
+  /// Max categories allowed. At this limit the user must delete one they added
+  /// before creating a new one.
+  static const int maxCategories = 12;
 }

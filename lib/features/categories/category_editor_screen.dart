@@ -6,16 +6,14 @@ import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_icons.dart';
 import '../../data/models/category.dart';
-import '../../data/models/transaction_type.dart';
 import '../../providers/category_providers.dart';
 
 /// Create or edit a single category (name + icon + color).
 ///
-/// Pass [existing] to edit; pass only [kind] to create a new one of that side.
+/// Pass [existing] to edit; pass nothing to create a new one.
 class CategoryEditorScreen extends ConsumerStatefulWidget {
-  const CategoryEditorScreen({super.key, required this.kind, this.existing});
+  const CategoryEditorScreen({super.key, this.existing});
 
-  final TransactionType kind;
   final Category? existing;
 
   @override
@@ -52,7 +50,6 @@ class _CategoryEditorScreenState extends ConsumerState<CategoryEditorScreen> {
     final category = Category(
       id: widget.existing?.id ?? const Uuid().v4(),
       name: _nameController.text.trim(),
-      kind: widget.existing?.kind ?? widget.kind,
       iconCodePoint: _iconCodePoint,
       colorValue: _colorValue,
     );
@@ -100,9 +97,9 @@ class _CategoryEditorScreenState extends ConsumerState<CategoryEditorScreen> {
             TextFormField(
               controller: _nameController,
               textCapitalization: TextCapitalization.words,
-              decoration: InputDecoration(
-                labelText: widget.kind.isIncome ? 'Source name' : 'Category name',
-                hintText: widget.kind.isIncome ? 'e.g. Salary' : 'e.g. Food',
+              decoration: const InputDecoration(
+                labelText: 'Category name',
+                hintText: 'e.g. Food',
               ),
               validator: (value) {
                 if ((value?.trim() ?? '').isEmpty) {
