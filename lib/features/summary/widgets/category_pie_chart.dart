@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/formatters.dart';
-import '../../../data/models/expense_category.dart';
+import '../../../data/models/category.dart';
 
 /// Donut chart of expenses by category, with a legend.
 ///
@@ -12,7 +12,7 @@ import '../../../data/models/expense_category.dart';
 class CategoryPieChart extends StatelessWidget {
   const CategoryPieChart({super.key, required this.expenseByCategory});
 
-  final Map<ExpenseCategory, double> expenseByCategory;
+  final Map<Category, double> expenseByCategory;
 
   @override
   Widget build(BuildContext context) {
@@ -66,7 +66,7 @@ class CategoryPieChart extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: AppConstants.spaceS),
-                Expanded(child: Text(entry.key.label)),
+                Expanded(child: Text(entry.key.name)),
                 Text(
                   '${Formatters.money(entry.value)}  (${percent.toStringAsFixed(0)}%)',
                   style: const TextStyle(fontWeight: FontWeight.w600),

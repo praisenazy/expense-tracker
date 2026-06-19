@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:my_project/core/constants/app_constants.dart';
-import 'package:my_project/data/models/expense_category.dart';
 import 'package:my_project/data/models/transaction.dart';
 import 'package:my_project/data/models/transaction_type.dart';
 import 'package:my_project/data/repositories/transaction_repository.dart';
@@ -14,15 +13,14 @@ Transaction _tx({
   required String id,
   double amount = 100,
   TransactionType type = TransactionType.expense,
-  ExpenseCategory category = ExpenseCategory.food,
+  String categoryId = 'cat-food',
   DateTime? date,
 }) {
   return Transaction(
     id: id,
-    title: 'Test $id',
     amount: amount,
     type: type,
-    category: category,
+    categoryId: categoryId,
     date: date ?? DateTime(2026, 6, 1),
   );
 }

@@ -4,7 +4,9 @@ import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 
 import 'app.dart';
 import 'core/constants/app_constants.dart';
+import 'data/models/category.dart';
 import 'data/models/transaction.dart';
+import 'data/repositories/category_repository.dart';
 import 'hive_registrar.g.dart'; // generated: gives Hive.registerAdapters()
 
 Future<void> main() async {
@@ -14,15 +16,40 @@ Future<void> main() async {
   // 1) Prepare Hive's on-device storage.
   await Hive.initFlutter();
 
-  // 2) Teach Hive about our custom types (Transaction, the two enums).
+  // 2) Teach Hive about our custom types (Transaction, Category, the enum).
   //    This single call comes from the generated hive_registrar.g.dart.
   Hive.registerAdapters();
 
   // 3) Open the boxes BEFORE the UI starts, so data is ready immediately
   //    and survives restarts (this is the "local storage" requirement).
-  await Hive.openBox<Transaction>(AppConstants.transactionsBox);
-  await Hive.openBox(AppConstants.settingsBox);
+  final categoriesBox =
+      await _openBoxSafely<Category>(AppConstants.categoriesBox);
+  await _openBoxSafely<Transaction>(AppConstants.transactionsBox);
+  final settingsBox = await Hive.openBox(AppConstants.settingsBox);
 
-  // 4) ProviderScope is the root that powers Riverpod for the whole app.
+  // 4) First launch: fill in the default income & expense categories.
+  final categoryRepository = CategoryRepository(categoriesBox);
+  await categoryRepository.seedDefaultsIfEmpty();
+
+  // 4b) One-time cleanup: remove the old "Other"/"Others" categories that were
+  //     seeded on installs created before they were dropped.
+  if (settingsBox.get(AppConstants.removedLegacyOthersKey) != true) {
+    await categoryRepository.removeLegacyOtherCategories();
+    await settingsBox.put(AppConstants.removedLegacyOthersKey, true);
+  }
+
+  // 5) ProviderScope is the root that powers Riverpod for the whole app.
   runApp(const ProviderScope(child: ExpenseTrackerApp()));
+}
+
+/// Opens a typed box, recovering gracefully if existing data can't be read
+/// (e.g. after a model/schema change during development): the box is wiped and
+/// reopened empty instead of crashing the app at startup.
+Future<Box<T>> _openBoxSafely<T>(String name) async {
+  try {
+    return await Hive.openBox<T>(name);
+  } catch (_) {
+    await Hive.deleteBoxFromDisk(name);
+    return Hive.openBox<T>(name);
+  }
 }

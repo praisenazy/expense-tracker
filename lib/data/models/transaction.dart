@@ -1,7 +1,6 @@
 import 'package:hive_ce/hive.dart';
 
 import '../../core/constants/app_constants.dart';
-import 'expense_category.dart';
 import 'transaction_type.dart';
 
 // The generated TransactionAdapter is written into this part file by
@@ -17,10 +16,9 @@ part 'transaction.g.dart';
 class Transaction {
   const Transaction({
     required this.id,
-    required this.title,
     required this.amount,
     required this.type,
-    required this.category,
+    required this.categoryId,
     required this.date,
     this.note,
   });
@@ -30,28 +28,27 @@ class Transaction {
   @HiveField(0)
   final String id;
 
-  /// Short description, e.g. "Groceries".
-  @HiveField(1)
-  final String title;
-
   /// Always POSITIVE. The sign comes from [type] (see [signedAmount]).
-  @HiveField(2)
+  @HiveField(1)
   final double amount;
 
   /// Income or expense.
-  @HiveField(3)
+  @HiveField(2)
   final TransactionType type;
 
-  /// One of the six spending categories.
-  @HiveField(4)
-  final ExpenseCategory category;
+  /// The id of the Category this belongs to (income source or expense type).
+  /// We store the id (not the Category object) so renaming/restyling a category
+  /// is reflected everywhere automatically.
+  @HiveField(3)
+  final String categoryId;
 
   /// When the transaction happened.
-  @HiveField(5)
+  @HiveField(4)
   final DateTime date;
 
-  /// Optional free-text note.
-  @HiveField(6)
+  /// Optional free-text description. This is what shows on the transaction row;
+  /// when empty, the UI falls back to the category name.
+  @HiveField(5)
   final String? note;
 
   /// +amount for income, -amount for expense. Handy for summing a balance.
@@ -61,19 +58,17 @@ class Transaction {
   /// its current value. This is how we "edit" an immutable object.
   Transaction copyWith({
     String? id,
-    String? title,
     double? amount,
     TransactionType? type,
-    ExpenseCategory? category,
+    String? categoryId,
     DateTime? date,
     String? note,
   }) {
     return Transaction(
       id: id ?? this.id,
-      title: title ?? this.title,
       amount: amount ?? this.amount,
       type: type ?? this.type,
-      category: category ?? this.category,
+      categoryId: categoryId ?? this.categoryId,
       date: date ?? this.date,
       note: note ?? this.note,
     );

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../data/models/transaction.dart';
+import '../../providers/category_providers.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/transaction_providers.dart';
 import '../add_edit/add_edit_transaction_screen.dart';
@@ -153,13 +154,20 @@ class _TransactionList extends ConsumerWidget {
     WidgetRef ref,
     Transaction transaction,
   ) {
+    // Label the deleted item by its note, falling back to the category name.
+    final note = transaction.note?.trim();
+    final label = (note != null && note.isNotEmpty)
+        ? note
+        : ref.read(categoryByIdProvider)[transaction.categoryId]?.name ??
+            'transaction';
+
     ref.read(transactionsProvider.notifier).remove(transaction.id);
 
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text('Deleted "${transaction.title}"'),
+          content: Text('Deleted "$label"'),
           action: SnackBarAction(
             label: 'UNDO',
             // Re-add the exact same transaction (same id) to restore it.

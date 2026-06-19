@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../data/models/expense_category.dart';
+import '../data/models/category.dart';
 import '../data/models/transaction.dart';
+import 'category_providers.dart';
 import 'transaction_providers.dart';
 
 /// The month currently shown on the Summary screen.
@@ -38,7 +39,7 @@ class MonthlySummary {
   final double totalExpense;
 
   /// Expense totals per category — drives the pie chart.
-  final Map<ExpenseCategory, double> expenseByCategory;
+  final Map<Category, double> expenseByCategory;
 
   /// The transactions that fall in this month (newest first).
   final List<Transaction> transactions;
@@ -55,6 +56,7 @@ class MonthlySummary {
 final monthlySummaryProvider = Provider<MonthlySummary>((ref) {
   final all = ref.watch(transactionsProvider);
   final month = ref.watch(selectedMonthProvider);
+  final categoriesById = ref.watch(categoryByIdProvider);
 
   // Keep only transactions in the selected month/year.
   final inMonth = all
@@ -63,14 +65,18 @@ final monthlySummaryProvider = Provider<MonthlySummary>((ref) {
 
   double income = 0;
   double expense = 0;
-  final byCategory = <ExpenseCategory, double>{};
+  final byCategory = <Category, double>{};
 
   for (final t in inMonth) {
     if (t.type.isIncome) {
       income += t.amount;
     } else {
       expense += t.amount;
-      byCategory[t.category] = (byCategory[t.category] ?? 0) + t.amount;
+      // Resolve the category; skip if it was deleted (orphaned transaction).
+      final category = categoriesById[t.categoryId];
+      if (category != null) {
+        byCategory[category] = (byCategory[category] ?? 0) + t.amount;
+      }
     }
   }
 

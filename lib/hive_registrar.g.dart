@@ -3,13 +3,13 @@
 // Check in to version control
 
 import 'package:hive_ce/hive_ce.dart';
-import 'package:my_project/data/models/expense_category.dart';
+import 'package:my_project/data/models/category.dart';
 import 'package:my_project/data/models/transaction.dart';
 import 'package:my_project/data/models/transaction_type.dart';
 
 extension HiveRegistrar on HiveInterface {
   void registerAdapters() {
-    registerAdapter(ExpenseCategoryAdapter());
+    registerAdapter(CategoryAdapter());
     registerAdapter(TransactionAdapter());
     registerAdapter(TransactionTypeAdapter());
   }
@@ -17,7 +17,7 @@ extension HiveRegistrar on HiveInterface {
 
 extension IsolatedHiveRegistrar on IsolatedHiveInterface {
   void registerAdapters() {
-    registerAdapter(ExpenseCategoryAdapter());
+    registerAdapter(CategoryAdapter());
     registerAdapter(TransactionAdapter());
     registerAdapter(TransactionTypeAdapter());
   }
