@@ -13,6 +13,7 @@ import '../../providers/transaction_providers.dart';
 import '../categories/category_editor_screen.dart';
 import '../categories/widgets/category_limit_sheet.dart';
 import 'widgets/category_picker.dart';
+import 'widgets/type_toggle.dart';
 
 /// Screen for BOTH adding and editing a transaction.
 ///
@@ -181,22 +182,9 @@ class _AddEditTransactionScreenState
           padding: const EdgeInsets.all(AppConstants.spaceM),
           children: [
             // ---- Income / Expense toggle ----
-            SegmentedButton<TransactionType>(
-              segments: const [
-                ButtonSegment(
-                  value: TransactionType.expense,
-                  label: Text('Expense'),
-                  icon: Icon(Icons.arrow_upward_rounded),
-                ),
-                ButtonSegment(
-                  value: TransactionType.income,
-                  label: Text('Income'),
-                  icon: Icon(Icons.arrow_downward_rounded),
-                ),
-              ],
-              selected: {_type},
-              onSelectionChanged: (selection) =>
-                  _onTypeChanged(selection.first),
+            TypeToggle(
+              value: _type,
+              onChanged: _onTypeChanged,
             ),
             const SizedBox(height: AppConstants.spaceL),
 
