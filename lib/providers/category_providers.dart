@@ -3,6 +3,7 @@ import 'package:hive_ce/hive.dart';
 
 import '../core/constants/app_constants.dart';
 import '../data/models/category.dart';
+import '../data/models/transaction_type.dart';
 import '../data/repositories/category_repository.dart';
 
 /// The already-open Hive box of categories.
@@ -40,6 +41,13 @@ class CategoriesNotifier extends Notifier<List<Category>> {
     state = _repo.getAll();
   }
 }
+
+/// Categories for one side (income or expense). `.family` takes the kind.
+final categoriesByKindProvider =
+    Provider.family<List<Category>, TransactionType>((ref, kind) {
+  final all = ref.watch(categoriesProvider);
+  return all.where((c) => c.kind == kind).toList();
+});
 
 /// id -> Category lookup, so a transaction row can resolve its category fast.
 final categoryByIdProvider = Provider<Map<String, Category>>((ref) {

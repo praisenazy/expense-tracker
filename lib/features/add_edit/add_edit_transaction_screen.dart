@@ -12,6 +12,7 @@ import '../../providers/category_providers.dart';
 import '../../providers/transaction_providers.dart';
 import '../categories/category_editor_screen.dart';
 import '../categories/widgets/category_limit_sheet.dart';
+import 'widgets/app_date_picker.dart';
 import 'widgets/category_picker.dart';
 import 'widgets/type_toggle.dart';
 
@@ -59,7 +60,7 @@ class _AddEditTransactionScreenState
     _noteController = TextEditingController(text: existing?.note ?? '');
     _type = existing?.type ?? TransactionType.expense;
     _date = existing?.date ?? DateTime.now();
-    _categoryId = existing?.categoryId ?? _firstCategoryId();
+    _categoryId = existing?.categoryId ?? _firstCategoryIdFor(_type);
   }
 
   @override
@@ -69,32 +70,34 @@ class _AddEditTransactionScreenState
     super.dispose();
   }
 
-  /// The first available category id, or null if none exist.
-  String? _firstCategoryId() {
-    final list = ref.read(categoriesProvider);
+  /// The first available category id for a kind, or null if none exist.
+  String? _firstCategoryIdFor(TransactionType kind) {
+    final list = ref.read(categoriesByKindProvider(kind));
     return list.isEmpty ? null : list.first.id;
   }
 
-  /// Keep the selection valid (e.g. after returning from the editor).
+  /// Keep the selection valid for the current type (after switching
+  /// income/expense, or returning from the editor).
   void _ensureValidSelection() {
-    final validIds = ref.read(categoriesProvider).map((c) => c.id).toSet();
+    final validIds =
+        ref.read(categoriesByKindProvider(_type)).map((c) => c.id).toSet();
     if (_categoryId == null || !validIds.contains(_categoryId)) {
-      _categoryId = _firstCategoryId();
+      _categoryId = _firstCategoryIdFor(_type);
     }
   }
 
-  /// Opens the editor to create a new category, then selects it. If at the
-  /// limit, the user is first asked to delete one they added.
+  /// Opens the editor to create a new category, then selects it. If this side
+  /// is at the limit, the user is first asked to delete one they added.
   Future<void> _openNewCategory() async {
-    final atLimit =
-        ref.read(categoriesProvider).length >= AppConstants.maxCategories;
+    final atLimit = ref.read(categoriesByKindProvider(_type)).length >=
+        AppConstants.maxCategoriesPerKind;
     if (atLimit) {
-      final madeRoom = await showCategoryLimitSheet(context);
+      final madeRoom = await showCategoryLimitSheet(context, _type);
       if (madeRoom != true || !mounted) return;
     }
 
     final created = await Navigator.of(context).push<Category>(
-      MaterialPageRoute(builder: (_) => const CategoryEditorScreen()),
+      MaterialPageRoute(builder: (_) => CategoryEditorScreen(kind: _type)),
     );
     if (!mounted) return;
     setState(() {
@@ -107,11 +110,10 @@ class _AddEditTransactionScreenState
   }
 
   Future<void> _pickDate() async {
-    final picked = await showDatePicker(
+    final picked = await showAppDatePicker(
       context: context,
       initialDate: _date,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      accent: _accent, // red for Expense, blue for Income
     );
     if (picked != null) {
       setState(() => _date = picked);
@@ -154,7 +156,8 @@ class _AddEditTransactionScreenState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final categories = ref.watch(categoriesProvider);
+    // Only the categories for the currently-selected side (income or expense).
+    final categories = ref.watch(categoriesByKindProvider(_type));
 
     return Scaffold(
       backgroundColor: isDark ? null : const Color(0xFFF4F5FA),
@@ -180,7 +183,10 @@ class _AddEditTransactionScreenState
             // ---- Income / Expense sliding toggle ----
             TypeToggle(
               value: _type,
-              onChanged: (type) => setState(() => _type = type),
+              onChanged: (type) => setState(() {
+                _type = type;
+                _ensureValidSelection(); // chips differ per side
+              }),
             ),
             const SizedBox(height: AppConstants.spaceL),
 
@@ -337,7 +343,7 @@ class _AddEditTransactionScreenState
             // ---- Save (vibrant gradient button) ----
             _GradientButton(
               accent: _accent,
-              label: _isEditing ? 'Save Changes' : 'Add Transaction',
+              label: _isEditing ? 'Save Changes' : 'Save Transaction',
               onTap: _save,
             ),
           ],
@@ -403,39 +409,40 @@ class _GradientButton extends StatelessWidget {
     // Slightly darker second stop for a richer gradient.
     final darker = Color.lerp(accent, Colors.black, 0.18)!;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          height: 56,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(colors: [accent, darker]),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: accent.withValues(alpha: 0.4),
-                blurRadius: 16,
-                offset: const Offset(0, 8),
-              ),
-            ],
+    return DecoratedBox(
+      // Soft shadow that follows the pill shape. The negative spread tucks it
+      // under the button so it reads as a gentle glow, not a hard rectangle.
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: 0.30),
+            blurRadius: 18,
+            spreadRadius: -4,
+            offset: const Offset(0, 10),
           ),
-          child: Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.check_rounded, color: Colors.white),
-                const SizedBox(width: AppConstants.spaceS),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(28), // fully rounded pill
+          child: Ink(
+            height: 56,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [accent, darker]),
+              borderRadius: BorderRadius.circular(28), // fully rounded pill
+            ),
+            child: Center(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
                 ),
-              ],
+              ),
             ),
           ),
         ),

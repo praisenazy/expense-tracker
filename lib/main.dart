@@ -27,15 +27,15 @@ Future<void> main() async {
   await _openBoxSafely<Transaction>(AppConstants.transactionsBox);
   final settingsBox = await Hive.openBox(AppConstants.settingsBox);
 
-  // 4) First launch: fill in the default income & expense categories.
+  // 4) First launch: fill in the default categories.
   final categoryRepository = CategoryRepository(categoriesBox);
   await categoryRepository.seedDefaultsIfEmpty();
 
-  // 4b) One-time cleanup: remove the old "Other"/"Others" categories that were
-  //     seeded on installs created before they were dropped.
-  if (settingsBox.get(AppConstants.removedLegacyOthersKey) != true) {
-    await categoryRepository.removeLegacyOtherCategories();
-    await settingsBox.put(AppConstants.removedLegacyOthersKey, true);
+  // 4b) One-time removal of the leftover "Others" category from older installs
+  //     (it's no longer a default). Runs once, then never again.
+  if (settingsBox.get(AppConstants.othersRemovedKey) != true) {
+    await categoryRepository.removeCategoriesNamed('Others');
+    await settingsBox.put(AppConstants.othersRemovedKey, true);
   }
 
   // 5) ProviderScope is the root that powers Riverpod for the whole app.

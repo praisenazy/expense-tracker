@@ -21,13 +21,14 @@ class CategoryAdapter extends TypeAdapter<Category> {
       name: fields[1] as String,
       iconCodePoint: (fields[2] as num).toInt(),
       colorValue: (fields[3] as num).toInt(),
+      kind: fields[4] as TransactionType,
     );
   }
 
   @override
   void write(BinaryWriter writer, Category obj) {
     writer
-      ..writeByte(4)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -35,7 +36,9 @@ class CategoryAdapter extends TypeAdapter<Category> {
       ..writeByte(2)
       ..write(obj.iconCodePoint)
       ..writeByte(3)
-      ..write(obj.colorValue);
+      ..write(obj.colorValue)
+      ..writeByte(4)
+      ..write(obj.kind);
   }
 
   @override

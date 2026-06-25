@@ -29,12 +29,12 @@ class CategoryRepository {
     }
   }
 
-  /// One-time cleanup for installs that were seeded before the generic
-  /// "Other"/"Others" categories were removed. Deletes those leftovers so they
-  /// no longer appear as chips.
-  Future<void> removeLegacyOtherCategories() async {
+  /// Deletes any stored categories whose name matches [name] (case-insensitive).
+  /// Used to clear a leftover category from older installs.
+  Future<void> removeCategoriesNamed(String name) async {
+    final target = name.trim().toLowerCase();
     final ids = _box.values
-        .where((c) => c.name == 'Other' || c.name == 'Others')
+        .where((c) => c.name.trim().toLowerCase() == target)
         .map((c) => c.id)
         .toList();
     for (final id in ids) {

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme/app_theme.dart';
-import 'features/home/home_screen.dart';
+import 'features/root/root_screen.dart';
 import 'providers/theme_provider.dart';
 
 /// Root of the app.
@@ -23,7 +23,7 @@ class ExpenseTrackerApp extends ConsumerWidget {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: themeMode, // light / dark / system
-      home: const HomeScreen(),
+      home: const RootScreen(),
     );
   }
 }

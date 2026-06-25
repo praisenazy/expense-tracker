@@ -1,71 +1,110 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../providers/summary_providers.dart';
 
-/// The headline card showing net balance plus income & expense totals.
+/// Premium full-width balance card for the home screen.
 ///
-/// Pure display widget: give it the three numbers and it renders them.
-class BalanceCard extends StatelessWidget {
-  const BalanceCard({
-    super.key,
-    required this.income,
-    required this.expense,
-    required this.balance,
-  });
+/// Shows the selected month (with ‹ › to switch), the net balance, and the
+/// month's income & expense. All text is white on a deep indigo gradient.
+class BalanceCard extends ConsumerWidget {
+  const BalanceCard({super.key});
 
-  final double income;
-  final double expense;
-  final double balance;
+  static const Color _deep1 = Color(0xFF4338CA); // deep indigo
+  static const Color _deep2 = Color(0xFF6D28D9); // violet
+  static const Color _incomeGreen = Color(0xFF2BD17E);
+  static const Color _expenseRed = Color(0xFFFF6B6B);
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final summary = ref.watch(monthlySummaryProvider);
+    final month = ref.watch(selectedMonthProvider);
+    final monthCtrl = ref.read(selectedMonthProvider.notifier);
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppConstants.spaceL),
       decoration: BoxDecoration(
-        color: scheme.primaryContainer,
-        borderRadius: BorderRadius.circular(AppConstants.cardRadius),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_deep1, _deep2],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: _deep1.withValues(alpha: 0.35),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ---- Month switcher ----
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _RoundIconButton(
+                icon: Icons.chevron_left_rounded,
+                onTap: monthCtrl.previousMonth,
+              ),
+              Text(
+                Formatters.monthYear(month),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              _RoundIconButton(
+                icon: Icons.chevron_right_rounded,
+                onTap: monthCtrl.nextMonth,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppConstants.spaceL),
+
+          // ---- Balance ----
           Text(
             'Total Balance',
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: scheme.onPrimaryContainer.withValues(alpha: 0.8),
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.8),
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
             ),
           ),
           const SizedBox(height: AppConstants.spaceXs),
           Text(
-            Formatters.money(balance),
-            style: theme.textTheme.headlineMedium?.copyWith(
-              color: scheme.onPrimaryContainer,
+            Formatters.money(summary.balance),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 34,
               fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: AppConstants.spaceL),
+
+          // ---- Income / Expense ----
           Row(
             children: [
               Expanded(
                 child: _MiniStat(
                   label: 'Income',
-                  amount: income,
+                  amount: summary.totalIncome,
                   icon: Icons.arrow_downward_rounded,
-                  color: AppColors.income,
+                  color: _incomeGreen,
                 ),
               ),
               const SizedBox(width: AppConstants.spaceM),
               Expanded(
                 child: _MiniStat(
                   label: 'Expense',
-                  amount: expense,
+                  amount: summary.totalExpense,
                   icon: Icons.arrow_upward_rounded,
-                  color: AppColors.expense,
+                  color: _expenseRed,
                 ),
               ),
             ],
@@ -76,7 +115,31 @@ class BalanceCard extends StatelessWidget {
   }
 }
 
-/// One income/expense stat inside the balance card.
+/// Translucent round button for the month arrows.
+class _RoundIconButton extends StatelessWidget {
+  const _RoundIconButton({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      customBorder: const CircleBorder(),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.15),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: Colors.white, size: 22),
+      ),
+    );
+  }
+}
+
+/// One income/expense figure inside the card.
 class _MiniStat extends StatelessWidget {
   const _MiniStat({
     required this.label,
@@ -92,30 +155,38 @@ class _MiniStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Container(
       padding: const EdgeInsets.all(AppConstants.spaceM),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 16,
-            backgroundColor: color.withValues(alpha: 0.15),
+            backgroundColor: Colors.white,
             child: Icon(icon, size: 18, color: color),
           ),
           const SizedBox(width: AppConstants.spaceS),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: theme.textTheme.labelSmall),
+              Text(
+                label,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 2),
               Text(
                 Formatters.money(amount),
-                style: theme.textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
               ),
             ],
           ),

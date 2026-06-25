@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/default_categories.dart';
 import '../../../data/models/category.dart';
+import '../../../data/models/transaction_type.dart';
 import '../../../providers/category_providers.dart';
 import '../../../providers/transaction_providers.dart';
 
@@ -11,25 +12,27 @@ import '../../../providers/transaction_providers.dart';
 ///
 /// Returns true if the user deleted one of their categories (freeing a slot),
 /// so the caller can then continue to create a new one.
-Future<bool?> showCategoryLimitSheet(BuildContext context) {
+Future<bool?> showCategoryLimitSheet(BuildContext context, TransactionType kind) {
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (_) => const _CategoryLimitSheet(),
+    builder: (_) => _CategoryLimitSheet(kind: kind),
   );
 }
 
 class _CategoryLimitSheet extends ConsumerWidget {
-  const _CategoryLimitSheet();
+  const _CategoryLimitSheet({required this.kind});
+
+  final TransactionType kind;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
 
-    // Only the user's own categories can be deleted (not the built-in ones).
+    // Only the user's own categories of this side can be deleted.
     final custom = ref
-        .watch(categoriesProvider)
+        .watch(categoriesByKindProvider(kind))
         .where((c) => !isDefaultCategory(c))
         .toList();
 
@@ -52,7 +55,8 @@ class _CategoryLimitSheet extends ConsumerWidget {
             ),
             const SizedBox(height: AppConstants.spaceS),
             Text(
-              'You can have up to ${AppConstants.maxCategories} categories. '
+              'You can have up to ${AppConstants.maxCategoriesPerKind} '
+              '${kind.isIncome ? 'sources' : 'categories'}. '
               'Delete one you added to make room for a new one.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.7),

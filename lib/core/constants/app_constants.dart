@@ -12,7 +12,7 @@ class AppConstants {
 
   // ---- Keys used inside the settings box ----
   static const String themeModeKey = 'theme_mode';
-  static const String removedLegacyOthersKey = 'removed_legacy_others_v1';
+  static const String othersRemovedKey = 'others_removed_v1';
 
   // ---- Hive type IDs (each @HiveType model needs a UNIQUE id) ----
   // Never reuse or reorder these once data has been saved on a device.
@@ -29,7 +29,7 @@ class AppConstants {
 
   static const double cardRadius = 16;
 
-  /// Max categories allowed. At this limit the user must delete one they added
-  /// before creating a new one.
-  static const int maxCategories = 12;
+  /// Max categories allowed per side (income or expense). At this limit the
+  /// user must delete one they added before creating a new one.
+  static const int maxCategoriesPerKind = 12;
 }

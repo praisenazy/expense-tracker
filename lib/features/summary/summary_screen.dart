@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_constants.dart';
-import '../../core/utils/formatters.dart';
 import '../../providers/summary_providers.dart';
 import '../home/widgets/balance_card.dart';
 import '../shared/empty_state.dart';
@@ -17,8 +16,6 @@ class SummaryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final summary = ref.watch(monthlySummaryProvider);
-    final month = ref.watch(selectedMonthProvider);
-    final monthNotifier = ref.read(selectedMonthProvider.notifier);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Monthly Summary')),
@@ -26,26 +23,8 @@ class SummaryScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.all(AppConstants.spaceM),
           children: [
-            // ---- Month selector ----
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton.filledTonal(
-                  onPressed: monthNotifier.previousMonth,
-                  icon: const Icon(Icons.chevron_left_rounded),
-                ),
-                Text(
-                  Formatters.monthYear(month),
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-                IconButton.filledTonal(
-                  onPressed: monthNotifier.nextMonth,
-                  icon: const Icon(Icons.chevron_right_rounded),
-                ),
-              ],
-            ),
+            // Balance card carries its own month switcher.
+            const BalanceCard(),
             const SizedBox(height: AppConstants.spaceL),
 
             if (summary.isEmpty)
@@ -59,14 +38,6 @@ class SummaryScreen extends ConsumerWidget {
                 ),
               )
             else ...[
-              // ---- Totals ----
-              BalanceCard(
-                income: summary.totalIncome,
-                expense: summary.totalExpense,
-                balance: summary.balance,
-              ),
-              const SizedBox(height: AppConstants.spaceL),
-
               // ---- Income vs Expense bar chart ----
               _ChartCard(
                 title: 'Income vs Expense',
