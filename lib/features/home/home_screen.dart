@@ -48,6 +48,10 @@ class HomeScreen extends ConsumerWidget {
     final total = summary.totalIncome + summary.totalExpense;
     final incomeRatio = total == 0 ? 0.0 : summary.totalIncome / total;
 
+    // Remaining balance for the month — never shown as negative.
+    final remainingBalance =
+        summary.balance < 0 ? 0.0 : summary.balance;
+
     return Scaffold(
       backgroundColor: _header,
       body: Column(
@@ -133,7 +137,7 @@ class HomeScreen extends ConsumerWidget {
                         onTap: monthCtrl.previousMonth,
                       ),
                       Text(
-                        Formatters.money(summary.balance),
+                        Formatters.money(remainingBalance),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 40,
