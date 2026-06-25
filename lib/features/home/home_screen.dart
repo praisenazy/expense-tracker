@@ -23,6 +23,7 @@ class HomeScreen extends ConsumerWidget {
   static const Color _header = AppColors.seed;
   static const Color _darkCard = Color(0xFF2A2D3A);
   static const Color _green = Color(0xFF2BD17E);
+  static const Color _red = Color(0xFFFF6B6B);
 
   // The full-width income/expense card extends well below the sheet's top so
   // it sits behind the sheet's rounded corner notches (covering the header
@@ -184,17 +185,21 @@ class HomeScreen extends ConsumerWidget {
                               _InlineStat(
                                 label: 'Income',
                                 amount: summary.totalIncome,
-                                color: Colors.white,
+                                color: _green,
                               ),
                               _InlineStat(
                                 label: 'Expenses',
                                 amount: summary.totalExpense,
-                                color: _green,
+                                color: _red,
                               ),
                             ],
                           ),
                           const SizedBox(height: AppConstants.spaceM),
-                          _ProgressBar(fraction: incomeRatio, color: _green),
+                          _ProgressBar(
+                            fraction: incomeRatio,
+                            color: _green, // income portion
+                            trackColor: _red, // expense portion
+                          ),
                         ],
                       ),
                     ),
@@ -361,12 +366,18 @@ class _InlineStat extends StatelessWidget {
   }
 }
 
-/// Rounded progress bar: [fraction] (0..1) filled with [color] over a track.
+/// Rounded progress bar: [fraction] (0..1) filled with [color] (income) over a
+/// [trackColor] track (expense).
 class _ProgressBar extends StatelessWidget {
-  const _ProgressBar({required this.fraction, required this.color});
+  const _ProgressBar({
+    required this.fraction,
+    required this.color,
+    required this.trackColor,
+  });
 
   final double fraction;
   final Color color;
+  final Color trackColor;
 
   @override
   Widget build(BuildContext context) {
@@ -374,7 +385,7 @@ class _ProgressBar extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       child: Stack(
         children: [
-          Container(height: 8, color: Colors.white.withValues(alpha: 0.18)),
+          Container(height: 8, color: trackColor),
           FractionallySizedBox(
             widthFactor: fraction.clamp(0.0, 1.0),
             child: Container(height: 8, color: color),
@@ -444,17 +455,26 @@ class _TransactionList extends ConsumerWidget {
 
     ref.read(transactionsProvider.notifier).remove(transaction.id);
 
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text('Deleted "$label"'),
-          action: SnackBarAction(
-            label: 'UNDO',
-            onPressed: () =>
-                ref.read(transactionsProvider.notifier).add(transaction),
-          ),
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    final controller = messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 3),
+        content: Text('Deleted "$label"'),
+        action: SnackBarAction(
+          label: 'UNDO',
+          onPressed: () =>
+              ref.read(transactionsProvider.notifier).add(transaction),
         ),
-      );
+      ),
+    );
+
+    // Some devices/emulators with system animations disabled don't fire the
+    // SnackBar's built-in auto-dismiss timer, so force-close it after 3s.
+    var closed = false;
+    controller.closed.then((_) => closed = true);
+    Future<void>.delayed(const Duration(seconds: 3), () {
+      if (!closed) controller.close();
+    });
   }
 }

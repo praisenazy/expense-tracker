@@ -106,17 +106,24 @@ class _CategoryLimitSheet extends ConsumerWidget {
         .where((t) => t.categoryId == category.id)
         .length;
 
+    // Never orphan transactions: a category that's in use can't be deleted.
+    if (inUse > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Can't delete \"${category.name}\" — it's used by $inUse "
+            "transaction${inUse == 1 ? '' : 's'}.",
+          ),
+        ),
+      );
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Delete category?'),
-        content: Text(
-          inUse > 0
-              ? '"${category.name}" is used by $inUse '
-                  'transaction${inUse == 1 ? '' : 's'}, which will become '
-                  'uncategorized.'
-              : '"${category.name}" will be removed.',
-        ),
+        content: Text('"${category.name}" will be removed.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
