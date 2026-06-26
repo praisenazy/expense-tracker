@@ -97,20 +97,23 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar> {
   }
 
   Widget _buildPill() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pillColor = isDark ? const Color(0xFF26262B) : Colors.white;
+
     return Container(
       height: _barHeight,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: pillColor,
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.22),
+            color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.22),
             blurRadius: 30,
             spreadRadius: 1,
             offset: const Offset(0, 14),
           ),
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.10),
+            color: Colors.black.withValues(alpha: isDark ? 0.30 : 0.10),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -140,7 +143,9 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar> {
     required String label,
   }) {
     final isActive = _pageForSlot(slot) == widget.currentIndex;
-    final color = isActive ? widget.primary : Colors.black54;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final inactiveColor = isDark ? Colors.white70 : Colors.black54;
+    final color = isActive ? widget.primary : inactiveColor;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
