@@ -405,7 +405,7 @@ class _TransactionList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return ListView.separated(
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.only(bottom: 110), // clear the floating nav bar
       itemCount: transactions.length,
       separatorBuilder: (_, _) =>
           const Divider(height: 1, indent: 16, endIndent: 16),

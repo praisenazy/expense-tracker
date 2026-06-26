@@ -21,7 +21,12 @@ class SummaryScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('Monthly Summary')),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(AppConstants.spaceM),
+          padding: const EdgeInsets.fromLTRB(
+            AppConstants.spaceM,
+            AppConstants.spaceM,
+            AppConstants.spaceM,
+            110, // clear the floating nav bar
+          ),
           children: [
             // Balance card carries its own month switcher.
             const BalanceCard(),
