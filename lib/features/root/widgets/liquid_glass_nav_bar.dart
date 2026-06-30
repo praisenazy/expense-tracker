@@ -97,8 +97,10 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar> {
   }
 
   Widget _buildPill() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pillColor = isDark ? const Color(0xFF26262B) : Colors.white;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    // Match the recent-transactions sheet background in dark mode.
+    final pillColor = isDark ? theme.colorScheme.surface : Colors.white;
 
     return Container(
       height: _barHeight,

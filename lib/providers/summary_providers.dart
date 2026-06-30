@@ -31,6 +31,7 @@ class MonthlySummary {
     required this.totalIncome,
     required this.totalExpense,
     required this.expenseByCategory,
+    required this.incomeByCategory,
     required this.transactions,
   });
 
@@ -38,8 +39,11 @@ class MonthlySummary {
   final double totalIncome;
   final double totalExpense;
 
-  /// Expense totals per category — drives the pie chart.
+  /// Expense totals per category — drives the expense donut.
   final Map<Category, double> expenseByCategory;
+
+  /// Income totals per category (source) — drives the income donut.
+  final Map<Category, double> incomeByCategory;
 
   /// The transactions that fall in this month (newest first).
   final List<Transaction> transactions;
@@ -65,17 +69,22 @@ final monthlySummaryProvider = Provider<MonthlySummary>((ref) {
 
   double income = 0;
   double expense = 0;
-  final byCategory = <Category, double>{};
+  final expenseByCategory = <Category, double>{};
+  final incomeByCategory = <Category, double>{};
 
   for (final t in inMonth) {
+    // Resolve the category; skip grouping if it was deleted (orphaned).
+    final category = categoriesById[t.categoryId];
     if (t.type.isIncome) {
       income += t.amount;
+      if (category != null) {
+        incomeByCategory[category] = (incomeByCategory[category] ?? 0) + t.amount;
+      }
     } else {
       expense += t.amount;
-      // Resolve the category; skip if it was deleted (orphaned transaction).
-      final category = categoriesById[t.categoryId];
       if (category != null) {
-        byCategory[category] = (byCategory[category] ?? 0) + t.amount;
+        expenseByCategory[category] =
+            (expenseByCategory[category] ?? 0) + t.amount;
       }
     }
   }
@@ -84,7 +93,8 @@ final monthlySummaryProvider = Provider<MonthlySummary>((ref) {
     month: month,
     totalIncome: income,
     totalExpense: expense,
-    expenseByCategory: byCategory,
+    expenseByCategory: expenseByCategory,
+    incomeByCategory: incomeByCategory,
     transactions: inMonth,
   );
 });
