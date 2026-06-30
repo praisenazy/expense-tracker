@@ -137,12 +137,18 @@ class HomeScreen extends ConsumerWidget {
                         pointLeft: true,
                         onTap: monthCtrl.previousMonth,
                       ),
-                      Text(
-                        Formatters.money(remainingBalance),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 40,
-                          fontWeight: FontWeight.w800,
+                      // Shrink big amounts to fit instead of overflowing.
+                      Expanded(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            Formatters.money(remainingBalance),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 40,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                         ),
                       ),
                       _MonthArrow(pointLeft: false, onTap: monthCtrl.nextMonth),
@@ -182,15 +188,20 @@ class HomeScreen extends ConsumerWidget {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              _InlineStat(
-                                label: 'Income',
-                                amount: summary.totalIncome,
-                                color: _green,
+                              Flexible(
+                                child: _InlineStat(
+                                  label: 'Income',
+                                  amount: summary.totalIncome,
+                                  color: _green,
+                                ),
                               ),
-                              _InlineStat(
-                                label: 'Expenses',
-                                amount: summary.totalExpense,
-                                color: _red,
+                              const SizedBox(width: AppConstants.spaceS),
+                              Flexible(
+                                child: _InlineStat(
+                                  label: 'Expenses',
+                                  amount: summary.totalExpense,
+                                  color: _red,
+                                ),
                               ),
                             ],
                           ),
@@ -344,24 +355,29 @@ class _InlineStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Text(
-          '$label: ',
-          style: TextStyle(
-            color: color, // label matches its amount color
-            fontSize: 14,
+    // Shrink to fit so very large amounts don't overflow the card.
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Row(
+        children: [
+          Text(
+            '$label: ',
+            style: TextStyle(
+              color: color, // label matches its amount color
+              fontSize: 14,
+            ),
           ),
-        ),
-        Text(
-          Formatters.money(amount),
-          style: TextStyle(
-            color: color,
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
+          Text(
+            Formatters.money(amount),
+            style: TextStyle(
+              color: color,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

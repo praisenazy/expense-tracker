@@ -60,11 +60,18 @@ class TransactionTile extends ConsumerWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      trailing: Text(
-        '$sign${Formatters.money(transaction.amount)}',
-        style: theme.textTheme.titleSmall?.copyWith(
-          color: amountColor,
-          fontWeight: FontWeight.w700,
+      trailing: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 150),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: Text(
+            '$sign${Formatters.money(transaction.amount)}',
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: amountColor,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ),
       ),
     );

@@ -198,12 +198,15 @@ class _ToggleSide extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: AppConstants.spaceM),
         child: Column(
           children: [
-            Text(
-              amountText,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: active ? theme.colorScheme.onSurface : muted,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                amountText,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: active ? theme.colorScheme.onSurface : muted,
+                ),
               ),
             ),
             const SizedBox(height: 4),
@@ -384,12 +387,19 @@ class _CategoryRow extends StatelessWidget {
                   ],
                 ),
               ),
-              Text(
-                amountText,
-                style: TextStyle(
-                  color: amountColor,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
+              const SizedBox(width: AppConstants.spaceS),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    amountText,
+                    style: TextStyle(
+                      color: amountColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ),
             ],
