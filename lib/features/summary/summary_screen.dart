@@ -23,17 +23,23 @@ class SummaryScreen extends ConsumerStatefulWidget {
 class _SummaryScreenState extends ConsumerState<SummaryScreen> {
   bool _showIncome = false;
 
-  // Warm gradient: biggest slice is red, smallest is yellow.
-  static const Color _warmStart = Color(0xFFE0544C);
-  static const Color _warmEnd = Color(0xFFF6C945);
+  // Distinct color per category, assigned by rank (biggest first). Cycles if
+  // there are more categories than colors.
+  static const List<Color> _palette = [
+    Color(0xFFE0544C), // red — biggest slice
+    Color(0xFFF2994A), // orange
+    Color(0xFFF6C945), // yellow
+    Color(0xFF27AE60), // green
+    Color(0xFF2D9CDB), // blue
+    Color(0xFF9B51E0), // purple
+    Color(0xFFEB5E8B), // pink
+    Color(0xFF00BCD4), // teal
+  ];
   static const Color _expenseColor = Color(0xFFE0544C);
   static const Color _incomeColor = Color(0xFF27AE60);
   static const Color _amber = Color(0xFFF2A93C);
 
-  Color _colorFor(int index, int count) {
-    if (count <= 1) return _warmStart;
-    return Color.lerp(_warmStart, _warmEnd, index / (count - 1))!;
-  }
+  Color _colorFor(int index, int count) => _palette[index % _palette.length];
 
   @override
   Widget build(BuildContext context) {
@@ -140,7 +146,7 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                           // Black shadow vanishes on dark backgrounds, so use a
                           // red-tinted glow (the slice's color) in dark mode.
                           shadowColor: theme.brightness == Brightness.dark
-                              ? _warmStart.withValues(alpha: 0.55)
+                              ? _palette.first.withValues(alpha: 0.55)
                               : Colors.black.withValues(alpha: 0.30),
                           onSwap: () =>
                               setState(() => _showIncome = !_showIncome),
@@ -261,11 +267,18 @@ class _Donut extends StatelessWidget {
       context,
     ).colorScheme.onSurface.withValues(alpha: 0.5);
 
-    final total = entries.fold<double>(0, (sum, e) => sum + e.value);
+    // Give every category a minimum wedge so tiny ones stay visible on the
+    // ring (the list below still shows the true amounts/percentages).
+    final rawTotal = entries.fold<double>(0, (sum, e) => sum + e.value);
+    final minValue = rawTotal * 0.04; // each slice is at least ~4% of the ring
+    final displayValues = [
+      for (final e in entries) math.max(e.value, minValue),
+    ];
+    final displayTotal = displayValues.fold<double>(0, (sum, v) => sum + v);
     // Sweep (radians) of the largest slice, starting at the top (-90°).
-    final topSweep = total == 0
+    final topSweep = displayTotal == 0
         ? 0.0
-        : (entries.first.value / total) * 2 * math.pi;
+        : (displayValues.first / displayTotal) * 2 * math.pi;
 
     return SizedBox(
       height: 230,
@@ -286,15 +299,34 @@ class _Donut extends StatelessWidget {
           ),
           PieChart(
             PieChartData(
-              sectionsSpace: 2,
+              sectionsSpace: 3, // normal gap between slices
               centerSpaceRadius: _centerSpace,
               startDegreeOffset: -90,
               sections: [
-                for (var i = 0; i < entries.length; i++)
+                for (var i = 0; i < entries.length; i++) ...[
                   PieChartSectionData(
-                    value: entries[i].value,
+                    value: displayValues[i],
                     color: colorFor(i, entries.length),
                     radius: i == 0 ? _topRadius : _baseRadius,
+                    showTitle: false,
+                  ),
+                  // Hair-thin transparent spacer after the red slice: the 4px
+                  // gap on each side of it makes red's gap ~8px.
+                  if (i == 0 && entries.length > 1)
+                    PieChartSectionData(
+                      value:
+                          displayTotal * 0.004, // widen red's gap — adjust me
+                      color: Colors.transparent,
+                      radius: _baseRadius,
+                      showTitle: false,
+                    ),
+                ],
+                // Extra gap before red (the ring wraps around to it).
+                if (entries.length > 1)
+                  PieChartSectionData(
+                    value: displayTotal * 0.004, // widen red's gap — adjust me
+                    color: Colors.transparent,
+                    radius: _baseRadius,
                     showTitle: false,
                   ),
               ],
