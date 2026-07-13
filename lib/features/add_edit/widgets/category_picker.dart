@@ -7,6 +7,9 @@ import '../../../data/models/category.dart';
 /// and white text; the selected one gets a white ring + check + stronger glow.
 /// An "Edit" chip at the end opens the create-your-own-category screen.
 ///
+/// Long-pressing a chip reports it via [onLongPress] (used to edit/delete
+/// custom categories).
+///
 /// "Controlled" widget: the parent owns the selection and passes it in.
 class CategoryPicker extends StatelessWidget {
   const CategoryPicker({
@@ -15,12 +18,14 @@ class CategoryPicker extends StatelessWidget {
     required this.selectedId,
     required this.onSelected,
     required this.onEditPressed,
+    required this.onLongPress,
   });
 
   final List<Category> categories;
   final String? selectedId;
   final ValueChanged<String> onSelected;
   final VoidCallback onEditPressed;
+  final ValueChanged<Category> onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +40,7 @@ class CategoryPicker extends StatelessWidget {
           final isSelected = category.id == selectedId;
           return GestureDetector(
             onTap: () => onSelected(category.id),
+            onLongPress: () => onLongPress(category),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
               curve: Curves.easeOut,

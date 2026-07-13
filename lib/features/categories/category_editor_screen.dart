@@ -29,6 +29,10 @@ class _CategoryEditorScreenState extends ConsumerState<CategoryEditorScreen> {
   late int _iconCodePoint;
   late int _colorValue;
 
+  // Collapsed by default (a few rows); "See more" reveals the rest.
+  bool _showAllIcons = false;
+  static const int _collapsedIconRows = 4;
+
   bool get _isEditing => widget.existing != null;
 
   @override
@@ -97,11 +101,12 @@ class _CategoryEditorScreenState extends ConsumerState<CategoryEditorScreen> {
             const SizedBox(height: AppConstants.spaceL),
 
             // ---- Name ----
+            Text('Category name', style: theme.textTheme.labelLarge),
+            const SizedBox(height: AppConstants.spaceS),
             TextFormField(
               controller: _nameController,
               textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
-                labelText: 'Category name',
                 hintText: 'e.g. Food',
               ),
               validator: (value) {
@@ -116,40 +121,62 @@ class _CategoryEditorScreenState extends ConsumerState<CategoryEditorScreen> {
             // ---- Icon picker ----
             Text('Icon', style: theme.textTheme.labelLarge),
             const SizedBox(height: AppConstants.spaceS),
-            Wrap(
-              spacing: AppConstants.spaceS,
-              runSpacing: AppConstants.spaceS,
-              children: AppIcons.choices.map((icon) {
-                final isSelected = icon.codePoint == _iconCodePoint;
-                return InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () =>
-                      setState(() => _iconCodePoint = icon.codePoint),
-                  child: Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? selectedColor.withValues(alpha: 0.18)
-                          : theme.colorScheme.surfaceContainerHighest
-                              .withValues(alpha: 0.4),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSelected
-                            ? selectedColor
-                            : Colors.transparent,
-                        width: 2,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                const gap = 4.0;
+                const minCell = 46.0;
+                // Columns that fill the full width, with 4px gaps.
+                final columns =
+                    (constraints.maxWidth / (minCell + gap)).floor().clamp(1, 12);
+                final cell =
+                    (constraints.maxWidth - gap * (columns - 1)) / columns;
+
+                final all = AppIcons.choices;
+                final collapsedCount = columns * _collapsedIconRows;
+                final showToggle = all.length > collapsedCount;
+                final visible = _showAllIcons
+                    ? all
+                    : all.take(collapsedCount).toList();
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: gap,
+                      runSpacing: gap,
+                      children: [
+                        for (final icon in visible)
+                          _IconCell(
+                            icon: icon,
+                            size: cell,
+                            selected: icon.codePoint == _iconCodePoint,
+                            selectedColor: selectedColor,
+                            onTap: () => setState(
+                              () => _iconCodePoint = icon.codePoint,
+                            ),
+                          ),
+                      ],
+                    ),
+                    if (showToggle)
+                      Align(
+                        alignment: Alignment.center,
+                        child: TextButton.icon(
+                          onPressed: () => setState(
+                            () => _showAllIcons = !_showAllIcons,
+                          ),
+                          icon: Icon(
+                            _showAllIcons
+                                ? Icons.expand_less_rounded
+                                : Icons.expand_more_rounded,
+                          ),
+                          label: Text(
+                            _showAllIcons ? 'Show less' : 'See more icons',
+                          ),
+                        ),
                       ),
-                    ),
-                    child: Icon(
-                      icon,
-                      color: isSelected
-                          ? selectedColor
-                          : theme.colorScheme.onSurface,
-                    ),
-                  ),
+                  ],
                 );
-              }).toList(),
+              },
             ),
             const SizedBox(height: AppConstants.spaceL),
 
@@ -194,6 +221,52 @@ class _CategoryEditorScreenState extends ConsumerState<CategoryEditorScreen> {
               label: Text(_isEditing ? 'Save Changes' : 'Add Category'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A single square, full-width-justified icon option in the picker.
+class _IconCell extends StatelessWidget {
+  const _IconCell({
+    required this.icon,
+    required this.size,
+    required this.selected,
+    required this.selectedColor,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final double size;
+  final bool selected;
+  final Color selectedColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected
+              ? selectedColor.withValues(alpha: 0.18)
+              : theme.colorScheme.surfaceContainerHighest
+                  .withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? selectedColor : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: Icon(
+          icon,
+          color: selected ? selectedColor : theme.colorScheme.onSurface,
         ),
       ),
     );

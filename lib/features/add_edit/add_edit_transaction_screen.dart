@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../core/constants/default_categories.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/category.dart';
 import '../../data/models/transaction.dart';
@@ -107,6 +108,122 @@ class _AddEditTransactionScreenState
         _ensureValidSelection();
       }
     });
+  }
+
+  /// Long-press a category chip to edit or delete it. Only the user's own
+  /// (custom) categories can be changed — the built-in defaults are locked.
+  Future<void> _onCategoryLongPress(Category category) async {
+    if (isDefaultCategory(category)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Default categories can't be edited or deleted."),
+        ),
+      );
+      return;
+    }
+
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: category.color.withValues(alpha: 0.15),
+                child: Icon(category.icon, color: category.color),
+              ),
+              title: Text(
+                category.name,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.edit_rounded),
+              title: const Text('Edit'),
+              onTap: () => Navigator.of(sheetContext).pop('edit'),
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.delete_outline_rounded,
+                color: Theme.of(sheetContext).colorScheme.error,
+              ),
+              title: Text(
+                'Delete',
+                style: TextStyle(
+                  color: Theme.of(sheetContext).colorScheme.error,
+                ),
+              ),
+              onTap: () => Navigator.of(sheetContext).pop('delete'),
+            ),
+            const SizedBox(height: AppConstants.spaceS),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+
+    if (action == 'edit') {
+      final updated = await Navigator.of(context).push<Category>(
+        MaterialPageRoute(
+          builder: (_) => CategoryEditorScreen(
+            kind: category.kind,
+            existing: category,
+          ),
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        if (updated != null) _categoryId = updated.id;
+        _ensureValidSelection();
+      });
+    } else if (action == 'delete') {
+      await _deleteCategory(category);
+    }
+  }
+
+  Future<void> _deleteCategory(Category category) async {
+    // Never orphan transactions: block deleting a category that's in use.
+    final inUse = ref
+        .read(transactionsProvider)
+        .where((t) => t.categoryId == category.id)
+        .length;
+    if (inUse > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Can't delete \"${category.name}\" — it's used by $inUse "
+            "transaction${inUse == 1 ? '' : 's'}.",
+          ),
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete category?'),
+        content: Text('"${category.name}" will be removed.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    await ref.read(categoriesProvider.notifier).remove(category.id);
+    if (!mounted) return;
+    setState(_ensureValidSelection);
   }
 
   Future<void> _pickDate() async {
@@ -312,6 +429,7 @@ class _AddEditTransactionScreenState
               selectedId: _categoryId,
               onSelected: (id) => setState(() => _categoryId = id),
               onEditPressed: _openNewCategory,
+              onLongPress: _onCategoryLongPress,
             ),
             const SizedBox(height: AppConstants.spaceL),
 
