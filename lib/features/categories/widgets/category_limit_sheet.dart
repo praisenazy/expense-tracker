@@ -74,8 +74,9 @@ class _CategoryLimitSheet extends ConsumerWidget {
                     contentPadding: EdgeInsets.zero,
                     leading: CircleAvatar(
                       backgroundColor:
-                          category.color.withValues(alpha: 0.15),
-                      child: Icon(category.icon, color: category.color),
+                          category.color.withValues(alpha: 0.25),
+                      child: Text(category.emoji,
+                          style: const TextStyle(fontSize: 18)),
                     ),
                     title: Text(
                       category.name,

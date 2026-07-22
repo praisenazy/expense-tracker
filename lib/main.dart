@@ -22,8 +22,9 @@ Future<void> main() async {
 
   // 3) Open the boxes BEFORE the UI starts, so data is ready immediately
   //    and survives restarts (this is the "local storage" requirement).
-  final categoriesBox =
-      await _openBoxSafely<Category>(AppConstants.categoriesBox);
+  final categoriesBox = await _openBoxSafely<Category>(
+    AppConstants.categoriesBox,
+  );
   await _openBoxSafely<Transaction>(AppConstants.transactionsBox);
   final settingsBox = await Hive.openBox(AppConstants.settingsBox);
 
@@ -36,6 +37,14 @@ Future<void> main() async {
   if (settingsBox.get(AppConstants.othersRemovedKey) != true) {
     await categoryRepository.removeCategoriesNamed('Others');
     await settingsBox.put(AppConstants.othersRemovedKey, true);
+  }
+
+  // 4c) One-time repair of categories saved before the emoji switch, whose
+  //     stored icon was a Material glyph and now shows as an empty box. Their
+  //     emoji is re-derived from the category name. Runs once, then never again.
+  if (settingsBox.get(AppConstants.emojiRepairKey) != true) {
+    await categoryRepository.repairIconGlyphs();
+    await settingsBox.put(AppConstants.emojiRepairKey, true);
   }
 
   // 5) ProviderScope is the root that powers Riverpod for the whole app.

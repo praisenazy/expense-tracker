@@ -31,7 +31,7 @@ class TransactionTile extends ConsumerWidget {
     // Resolve the category; fall back if it no longer exists.
     final category = ref.watch(categoryByIdProvider)[transaction.categoryId];
     final categoryName = category?.name ?? 'Uncategorized';
-    final categoryIcon = category?.icon ?? AppIcons.fallback;
+    final categoryEmoji = category?.emoji ?? AppIcons.fallback;
     final categoryColor = category?.color ?? AppColors.others;
 
     // The note is the row's description; when empty, show the category name.
@@ -46,8 +46,8 @@ class TransactionTile extends ConsumerWidget {
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       leading: CircleAvatar(
-        backgroundColor: categoryColor.withValues(alpha: 0.15),
-        child: Icon(categoryIcon, color: categoryColor),
+        backgroundColor: categoryColor.withValues(alpha: 0.25),
+        child: Text(categoryEmoji, style: const TextStyle(fontSize: 20)),
       ),
       title: Text(
         primaryText,

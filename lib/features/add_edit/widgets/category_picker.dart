@@ -67,11 +67,11 @@ class CategoryPicker extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    isSelected ? Icons.check_rounded : category.icon,
-                    size: 18,
-                    color: Colors.white,
-                  ),
+                  isSelected
+                      ? const Icon(Icons.check_rounded,
+                          size: 18, color: Colors.white)
+                      : Text(category.emoji,
+                          style: const TextStyle(fontSize: 16)),
                   const SizedBox(width: 6),
                   Text(
                     category.name,

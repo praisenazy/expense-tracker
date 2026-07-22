@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:hive_ce/hive.dart';
 
 import '../../core/constants/app_constants.dart';
-import '../../core/theme/app_icons.dart';
 import 'transaction_type.dart';
 
 part 'category.g.dart';
@@ -31,7 +30,7 @@ class Category {
   @HiveField(1)
   final String name;
 
-  /// The chosen icon's codePoint (rebuilt via AppIcons).
+  /// The chosen emoji's Unicode code point (rebuilt via [emoji]).
   @HiveField(2)
   final int iconCodePoint;
 
@@ -43,8 +42,8 @@ class Category {
   @HiveField(4)
   final TransactionType kind;
 
-  /// The icon to display (kept valid by AppIcons' safelist).
-  IconData get icon => AppIcons.fromCodePoint(iconCodePoint);
+  /// The emoji to display, rebuilt from the stored code point.
+  String get emoji => String.fromCharCode(iconCodePoint);
 
   /// The color to display.
   Color get color => Color(colorValue);

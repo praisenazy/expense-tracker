@@ -8,10 +8,12 @@ import '../../core/theme/app_icons.dart';
 import '../../data/models/category.dart';
 import '../../data/models/transaction_type.dart';
 import '../../providers/category_providers.dart';
+import 'category_color_preview_screen.dart';
+import 'widgets/color_wheel_picker.dart';
+import 'widgets/sparkle_decoration.dart';
 
-/// Create or edit a single category (name + icon + color).
-///
-/// Pass [existing] to edit; pass only [kind] to create a new one of that side.
+/// Create or edit a single category (name + icon + color) with a rich picker:
+/// recommended palettes, an "all colors" grid, and a custom color wheel.
 class CategoryEditorScreen extends ConsumerStatefulWidget {
   const CategoryEditorScreen({super.key, required this.kind, this.existing});
 
@@ -29,25 +31,108 @@ class _CategoryEditorScreenState extends ConsumerState<CategoryEditorScreen> {
   late int _iconCodePoint;
   late int _colorValue;
 
-  // Collapsed by default (a few rows); "See more" reveals the rest.
-  bool _showAllIcons = false;
-  static const int _collapsedIconRows = 4;
+  bool _customTab = false;
+  int? _selectedPaletteIndex;
+
+  // Horizontal scroll of the recommended-palette row + the per-card stride
+  // (card width + gap), so the pagination dots and "scroll into view" can track
+  // which palette is active.
+  final ScrollController _paletteScroll = ScrollController();
+  double _paletteStride = 74;
+  int _palettePage = 0;
+
+  // True once the user taps an icon — stops name-based auto-suggestion from
+  // overriding their choice.
+  bool _iconManuallyPicked = false;
+
+  // Gap between recommended-palette cards.
+  static const double _palGap = 10;
+  static const double _palPad = 8;
 
   bool get _isEditing => widget.existing != null;
+  bool get _isIncome => (widget.existing?.kind ?? widget.kind).isIncome;
+  Color get _color => Color(_colorValue);
+  String get _emoji => String.fromCharCode(_iconCodePoint);
+
+  /// The default icon set for this side (income vs expense).
+  List<String> get _iconDefaults =>
+      _isIncome ? AppIcons.incomeDefaults : AppIcons.expenseDefaults;
 
   @override
   void initState() {
     super.initState();
     final existing = widget.existing;
     _nameController = TextEditingController(text: existing?.name ?? '');
-    _iconCodePoint = existing?.iconCodePoint ?? AppIcons.choices.first.codePoint;
-    _colorValue = existing?.colorValue ?? AppColors.palette.first.toARGB32();
+    _iconCodePoint = existing?.iconCodePoint ??
+        AppIcons.codePointOf(
+          (widget.kind.isIncome
+                  ? AppIcons.incomeDefaults
+                  : AppIcons.expenseDefaults)
+              .first,
+        );
+    _colorValue = existing?.colorValue ?? AppColors.allColors.first.toARGB32();
+    // Editing keeps the saved icon; new categories auto-suggest from the name.
+    _iconManuallyPicked = existing != null;
+  }
+
+  /// Called when the user taps any icon — locks in their choice.
+  void _selectIcon(int codePoint) {
+    setState(() {
+      _iconCodePoint = codePoint;
+      _iconManuallyPicked = true;
+    });
+  }
+
+  /// As the name changes, auto-pick the top suggested icon (until the user
+  /// manually chooses one).
+  void _onNameChanged(String value) {
+    setState(() {
+      if (!_iconManuallyPicked) {
+        final suggestions =
+            AppIcons.suggest(value, count: 6, fallback: _iconDefaults);
+        if (suggestions.isNotEmpty) {
+          _iconCodePoint = AppIcons.codePointOf(suggestions.first);
+        }
+      }
+    });
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _paletteScroll.dispose();
     super.dispose();
+  }
+
+  void _pickColor(Color color, {int? paletteIndex}) {
+    setState(() {
+      _colorValue = color.toARGB32();
+      _selectedPaletteIndex = paletteIndex;
+      // Move the pagination dot to the chosen palette.
+      if (paletteIndex != null) _palettePage = paletteIndex;
+    });
+    // Slide the chosen palette card into view so the movement is visible.
+    if (paletteIndex != null && _paletteScroll.hasClients) {
+      final target = (paletteIndex * _paletteStride).clamp(
+        0.0,
+        _paletteScroll.position.maxScrollExtent,
+      );
+      _paletteScroll.animateTo(
+        target,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  /// Keeps the pagination dot in sync when the user scrolls the palette row
+  /// by hand (rather than tapping a card).
+  void _onPaletteScroll() {
+    final page = (_paletteScroll.offset / _paletteStride).round().clamp(
+      0,
+      AppColors.recommendedPalettes.length - 1,
+    );
+    if (page != _palettePage) setState(() => _palettePage = page);
   }
 
   Future<void> _save() async {
@@ -67,38 +152,56 @@ class _CategoryEditorScreenState extends ConsumerState<CategoryEditorScreen> {
     } else {
       await notifier.add(category);
     }
-
-    // Return the saved category so the caller can auto-select it.
     if (mounted) Navigator.of(context).pop(category);
+  }
+
+  Future<void> _openPreview() async {
+    if (!_formKey.currentState!.validate()) return;
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => CategoryColorPreviewScreen(
+          name: _nameController.text,
+          emoji: _emoji,
+          color: _color,
+        ),
+      ),
+    );
+    if (saved == true) await _save();
+  }
+
+  Future<void> _showIconSheet() async {
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) =>
+          _IconPickerSheet(selectedCodePoint: _iconCodePoint, color: _color),
+    );
+    if (picked != null) _selectIcon(picked);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final selectedColor = Color(_colorValue);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEditing ? 'Edit Category' : 'New Category'),
+        centerTitle: true,
+        title: Text(_isEditing ? 'Edit Category' : 'Add Category'),
       ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(AppConstants.spaceM),
+          padding: const EdgeInsets.fromLTRB(
+            AppConstants.spaceL,
+            AppConstants.spaceS,
+            AppConstants.spaceL,
+            AppConstants.spaceXl,
+          ),
           children: [
-            // ---- Live preview ----
-            Center(
-              child: CircleAvatar(
-                radius: 32,
-                backgroundColor: selectedColor.withValues(alpha: 0.15),
-                child: Icon(
-                  AppIcons.fromCodePoint(_iconCodePoint),
-                  color: selectedColor,
-                  size: 32,
-                ),
-              ),
-            ),
-            const SizedBox(height: AppConstants.spaceL),
+            // ---- Icon preview with sparkles + edit pencil ----
+            Center(child: _iconPreview()),
+            const SizedBox(height: AppConstants.spaceM),
 
             // ---- Name ----
             Text('Category name', style: theme.textTheme.labelLarge),
@@ -106,168 +209,578 @@ class _CategoryEditorScreenState extends ConsumerState<CategoryEditorScreen> {
             TextFormField(
               controller: _nameController,
               textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                hintText: 'e.g. Food',
+              onChanged: _onNameChanged,
+              decoration: InputDecoration(
+                hintText: (widget.existing?.kind ?? widget.kind).isIncome
+                    ? 'e.g. Salary'
+                    : 'e.g. Food',
+                suffixIcon: const Padding(
+                  padding: EdgeInsets.only(right: 12),
+                  child: Text('😊', style: TextStyle(fontSize: 20)),
+                ),
+                suffixIconConstraints: const BoxConstraints(
+                  minWidth: 0,
+                  minHeight: 0,
+                ),
               ),
-              validator: (value) {
-                if ((value?.trim() ?? '').isEmpty) {
-                  return 'Please enter a name';
-                }
-                return null;
-              },
+              validator: (value) =>
+                  (value?.trim() ?? '').isEmpty ? 'Please enter a name' : null,
             ),
             const SizedBox(height: AppConstants.spaceL),
 
-            // ---- Icon picker ----
+            // ---- Icon row ----
             Text('Icon', style: theme.textTheme.labelLarge),
             const SizedBox(height: AppConstants.spaceS),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                const gap = 4.0;
-                const minCell = 46.0;
-                // Columns that fill the full width, with 4px gaps.
-                final columns =
-                    (constraints.maxWidth / (minCell + gap)).floor().clamp(1, 12);
-                final cell =
-                    (constraints.maxWidth - gap * (columns - 1)) / columns;
-
-                final all = AppIcons.choices;
-                final collapsedCount = columns * _collapsedIconRows;
-                final showToggle = all.length > collapsedCount;
-                final visible = _showAllIcons
-                    ? all
-                    : all.take(collapsedCount).toList();
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: gap,
-                      runSpacing: gap,
-                      children: [
-                        for (final icon in visible)
-                          _IconCell(
-                            icon: icon,
-                            size: cell,
-                            selected: icon.codePoint == _iconCodePoint,
-                            selectedColor: selectedColor,
-                            onTap: () => setState(
-                              () => _iconCodePoint = icon.codePoint,
-                            ),
-                          ),
-                      ],
-                    ),
-                    if (showToggle)
-                      Align(
-                        alignment: Alignment.center,
-                        child: TextButton.icon(
-                          onPressed: () => setState(
-                            () => _showAllIcons = !_showAllIcons,
-                          ),
-                          icon: Icon(
-                            _showAllIcons
-                                ? Icons.expand_less_rounded
-                                : Icons.expand_more_rounded,
-                          ),
-                          label: Text(
-                            _showAllIcons ? 'Show less' : 'See more icons',
-                          ),
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
+            _iconRow(),
             const SizedBox(height: AppConstants.spaceL),
 
-            // ---- Color picker ----
-            Text('Color', style: theme.textTheme.labelLarge),
-            const SizedBox(height: AppConstants.spaceS),
-            Wrap(
-              spacing: AppConstants.spaceM,
-              runSpacing: AppConstants.spaceM,
-              children: AppColors.palette.map((color) {
-                final value = color.toARGB32();
-                final isSelected = value == _colorValue;
-                return InkWell(
-                  borderRadius: BorderRadius.circular(24),
-                  onTap: () => setState(() => _colorValue = value),
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: isSelected
-                            ? theme.colorScheme.onSurface
-                            : Colors.transparent,
-                        width: 3,
-                      ),
-                    ),
-                    child: isSelected
-                        ? const Icon(Icons.check, color: Colors.white, size: 20)
-                        : null,
+            // ---- Choose Color ----
+            Row(
+              children: [
+                Text(
+                  'Choose Color',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
                   ),
-                );
-              }).toList(),
+                ),
+                const SizedBox(width: 6),
+                const Text('🎨', style: TextStyle(fontSize: 18)),
+              ],
             ),
-            const SizedBox(height: AppConstants.spaceXl),
+            const SizedBox(height: AppConstants.spaceM),
+            _tabBar(),
+            const SizedBox(height: AppConstants.spaceL),
 
-            // ---- Save ----
-            FilledButton.icon(
-              onPressed: _save,
-              icon: const Icon(Icons.check_rounded),
-              label: Text(_isEditing ? 'Save Changes' : 'Add Category'),
+            if (_customTab) ..._customContent() else ..._palettesContent(),
+
+            const SizedBox(height: AppConstants.spaceL),
+
+            // ---- Bottom action ----
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: _color,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(54),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                onPressed: _save,
+                icon: const Icon(Icons.check_rounded),
+                label: Text(
+                  _customTab
+                      ? 'Apply Color'
+                      : (_isEditing ? 'Save Changes' : 'Add Category'),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
             ),
           ],
         ),
       ),
     );
   }
+
+  // ===== Icon preview =====
+  Widget _iconPreview() {
+    return SparkleDecoration(
+      height: 130,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: 92,
+            height: 92,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _color.withValues(alpha: 0.40),
+              shape: BoxShape.circle,
+            ),
+            child: Text(_emoji, style: const TextStyle(fontSize: 44)),
+          ),
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: InkWell(
+              onTap: _showIconSheet,
+              customBorder: const CircleBorder(),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+                child: Icon(Icons.edit_rounded, size: 16, color: _color),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===== Icon row: 6 emoji suggested from the typed name (+ more) =====
+  Widget _iconRow() {
+    // Suggestions based on the category name; keep the selected emoji visible.
+    final suggestions = AppIcons.suggest(
+      _nameController.text,
+      count: 6,
+      fallback: _iconDefaults,
+    );
+    final shown = <String>[String.fromCharCode(_iconCodePoint)];
+    for (final emoji in suggestions) {
+      if (AppIcons.codePointOf(emoji) != _iconCodePoint && shown.length < 6) {
+        shown.add(emoji);
+      }
+    }
+
+    return SizedBox(
+      height: 56,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          for (final emoji in shown) _iconCircle(emoji),
+          _moreIconsButton(),
+        ],
+      ),
+    );
+  }
+
+  Widget _iconCircle(String emoji) {
+    final theme = Theme.of(context);
+    final isSelected = AppIcons.codePointOf(emoji) == _iconCodePoint;
+    return Padding(
+      padding: const EdgeInsets.only(right: 10),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: () => _selectIcon(AppIcons.codePointOf(emoji)),
+        child: Container(
+          width: 52,
+          height: 52,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isSelected
+                ? _color.withValues(alpha: 0.25)
+                : theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.5,
+                  ),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isSelected ? _color : Colors.transparent,
+              width: 2,
+            ),
+          ),
+          child: Text(emoji, style: const TextStyle(fontSize: 24)),
+        ),
+      ),
+    );
+  }
+
+  Widget _moreIconsButton() {
+    final theme = Theme.of(context);
+    return InkWell(
+      customBorder: const CircleBorder(),
+      onTap: _showIconSheet,
+      child: Container(
+        width: 52,
+        height: 52,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest.withValues(
+            alpha: 0.5,
+          ),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.more_horiz_rounded),
+      ),
+    );
+  }
+
+  // ===== Tabs =====
+  Widget _tabBar() {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: Row(
+        children: [
+          _tab(
+            'Palettes',
+            Icons.palette_rounded,
+            !_customTab,
+            () => setState(() => _customTab = false),
+          ),
+          _tab(
+            'Custom',
+            Icons.settings_rounded,
+            _customTab,
+            () => setState(() => _customTab = true),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tab(String label, IconData icon, bool active, VoidCallback onTap) {
+    final accent = _color; // follows the currently selected category color
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: active ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 8,
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: active ? accent : Colors.grey.shade600,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: active ? accent : Colors.grey.shade600,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ===== Palettes tab =====
+  List<Widget> _palettesContent() {
+    final theme = Theme.of(context);
+    return [
+      Text(
+        'Recommended Palettes',
+        style: theme.textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      const SizedBox(height: AppConstants.spaceS),
+      LayoutBuilder(
+        builder: (context, constraints) {
+          // Size cards so exactly 4 fit; the 5th scrolls into view.
+          final cardW = ((constraints.maxWidth - _palGap * 3) / 4).clamp(
+            64.0,
+            100.0,
+          );
+          _paletteStride = cardW + _palGap;
+          return SizedBox(
+            height: 92,
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (_) {
+                _onPaletteScroll();
+                return false;
+              },
+              child: ListView.separated(
+                controller: _paletteScroll,
+                scrollDirection: Axis.horizontal,
+                itemCount: AppColors.recommendedPalettes.length,
+                separatorBuilder: (_, _) => const SizedBox(width: _palGap),
+                itemBuilder: (context, i) => _paletteCard(i, cardW),
+              ),
+            ),
+          );
+        },
+      ),
+      const SizedBox(height: AppConstants.spaceS),
+      _dots(AppColors.recommendedPalettes.length),
+      const SizedBox(height: AppConstants.spaceL),
+      Text(
+        'All Colors',
+        style: theme.textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      const SizedBox(height: AppConstants.spaceM),
+      GridView.count(
+        crossAxisCount: 6,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        children: [for (final c in AppColors.allColors) _colorDot(c)],
+      ),
+    ];
+  }
+
+  Widget _paletteCard(int index, double width) {
+    final palette = AppColors.recommendedPalettes[index];
+    final selected = _selectedPaletteIndex == index;
+    return GestureDetector(
+      onTap: () => _pickColor(palette.colors.first, paletteIndex: index),
+      child: Container(
+        width: width,
+        padding: const EdgeInsets.all(_palPad),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected
+                ? palette.colors.first
+                : Colors.black.withValues(alpha: 0.08),
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 2 rows × 3 fixed-size swatches (deterministic height).
+            for (var r = 0; r < 2; r++) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  for (var c = 0; c < 3; c++)
+                    Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: palette.colors[r * 3 + c],
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                ],
+              ),
+              if (r == 0) const SizedBox(height: 5),
+            ],
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(
+                    palette.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                if (selected) ...[
+                  const SizedBox(width: 3),
+                  Icon(
+                    Icons.check_circle_rounded,
+                    size: 14,
+                    color: palette.colors.first,
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _dots(int count) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (int i = 0; i < count; i++)
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+            width: i == _palettePage ? 18 : 6,
+            height: 6,
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            decoration: BoxDecoration(
+              color: i == _palettePage
+                  ? _color
+                  : _color.withValues(alpha: 0.25),
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _colorDot(Color color) {
+    final isSelected = color.toARGB32() == _colorValue;
+    return GestureDetector(
+      onTap: () => _pickColor(color),
+      behavior: HitTestBehavior.opaque,
+      child: Center(
+        child: SizedBox(
+          width: 36,
+          height: 36,
+          child: Container(
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: isSelected
+                    ? Theme.of(context).colorScheme.onSurface
+                    : Colors.transparent,
+                width: 3,
+              ),
+            ),
+            child: isSelected
+                ? const Icon(Icons.check, color: Colors.white, size: 16)
+                : null,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ===== Custom tab =====
+  List<Widget> _customContent() {
+    final theme = Theme.of(context);
+    return [
+      ColorWheelPicker(
+        initialColor: _color,
+        onChanged: (c) => setState(() {
+          _colorValue = c.toARGB32();
+          _selectedPaletteIndex = null;
+        }),
+      ),
+      const SizedBox(height: AppConstants.spaceL),
+      Text('Preview', style: theme.textTheme.labelLarge),
+      const SizedBox(height: AppConstants.spaceS),
+      InkWell(
+        onTap: _openPreview,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(AppConstants.spaceM),
+          decoration: BoxDecoration(
+            color: _color,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: Colors.white.withValues(alpha: 0.25),
+                child: Text(_emoji, style: const TextStyle(fontSize: 18)),
+              ),
+              const SizedBox(width: AppConstants.spaceM),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _nameController.text.trim().isEmpty
+                          ? 'Category'
+                          : _nameController.text.trim(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Tap to preview in app',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: Colors.white),
+            ],
+          ),
+        ),
+      ),
+    ];
+  }
 }
 
-/// A single square, full-width-justified icon option in the picker.
-class _IconCell extends StatelessWidget {
-  const _IconCell({
-    required this.icon,
-    required this.size,
-    required this.selected,
-    required this.selectedColor,
-    required this.onTap,
+/// Bottom sheet grid of all selectable icons.
+class _IconPickerSheet extends StatelessWidget {
+  const _IconPickerSheet({
+    required this.selectedCodePoint,
+    required this.color,
   });
 
-  final IconData icon;
-  final double size;
-  final bool selected;
-  final Color selectedColor;
-  final VoidCallback onTap;
+  final int selectedCodePoint;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Container(
-        width: size,
-        height: size,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected
-              ? selectedColor.withValues(alpha: 0.18)
-              : theme.colorScheme.surfaceContainerHighest
-                  .withValues(alpha: 0.4),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: selected ? selectedColor : Colors.transparent,
-            width: 2,
+    return SizedBox(
+      height: MediaQuery.of(context).size.height * 0.6,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppConstants.spaceS),
+            child: Text(
+              'Choose icon',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
-        ),
-        child: Icon(
-          icon,
-          color: selected ? selectedColor : theme.colorScheme.onSurface,
-        ),
+          Expanded(
+            child: GridView.count(
+              crossAxisCount: 6,
+              padding: const EdgeInsets.all(AppConstants.spaceM),
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              children: [
+                for (final emoji in AppIcons.choices)
+                  InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () =>
+                        Navigator.of(context).pop(AppIcons.codePointOf(emoji)),
+                    child: Container(
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppIcons.codePointOf(emoji) == selectedCodePoint
+                            ? color.withValues(alpha: 0.18)
+                            : theme.colorScheme.surfaceContainerHighest
+                                  .withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color:
+                              AppIcons.codePointOf(emoji) == selectedCodePoint
+                              ? color
+                              : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                      child: Text(emoji, style: const TextStyle(fontSize: 24)),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

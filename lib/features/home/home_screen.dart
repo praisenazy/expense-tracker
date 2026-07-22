@@ -53,8 +53,14 @@ class HomeScreen extends ConsumerWidget {
     final remainingBalance =
         summary.balance < 0 ? 0.0 : summary.balance;
 
+    // Header color: the indigo brand band in light mode, but the dark theme
+    // background in dark mode so the top blends in (like the design) instead of
+    // showing a bright indigo block.
+    final headerColor = isDark ? theme.colorScheme.surface : _header;
+    final accent = isDark ? theme.colorScheme.primary : Colors.white;
+
     return Scaffold(
-      backgroundColor: _header,
+      backgroundColor: headerColor,
       body: Column(
         children: [
           // ===== Colored header (down to the balance) =====
@@ -91,7 +97,7 @@ class HomeScreen extends ConsumerWidget {
                             isDark
                                 ? Icons.light_mode_rounded
                                 : Icons.dark_mode_rounded,
-                            color: Colors.white,
+                            color: accent,
                           ),
                           onPressed: () => ref
                               .read(themeModeProvider.notifier)
@@ -108,8 +114,8 @@ class HomeScreen extends ConsumerWidget {
                     children: [
                       Text(
                         '$monthName ',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: accent,
                           fontSize: 26,
                           fontWeight: FontWeight.w500,
                         ),
@@ -118,8 +124,10 @@ class HomeScreen extends ConsumerWidget {
                         padding: const EdgeInsets.only(top: 8.0),
                         child: Text(
                           yearLabel,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: isDark
+                                ? theme.colorScheme.onSurfaceVariant
+                                : Colors.white,
                             fontSize: 15,
                             fontWeight: FontWeight.w400,
                           ),
@@ -136,6 +144,9 @@ class HomeScreen extends ConsumerWidget {
                       _MonthArrow(
                         pointLeft: true,
                         onTap: monthCtrl.previousMonth,
+                        color: isDark
+                            ? theme.colorScheme.primary
+                            : Colors.white54,
                       ),
                       // Shrink big amounts to fit instead of overflowing.
                       Expanded(
@@ -151,7 +162,13 @@ class HomeScreen extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      _MonthArrow(pointLeft: false, onTap: monthCtrl.nextMonth),
+                      _MonthArrow(
+                        pointLeft: false,
+                        onTap: monthCtrl.nextMonth,
+                        color: isDark
+                            ? theme.colorScheme.primary
+                            : Colors.white54,
+                      ),
                     ],
                   ),
                 ],
@@ -275,10 +292,15 @@ class HomeScreen extends ConsumerWidget {
 
 /// A thin, custom-drawn chevron (‹ or ›) used to switch months.
 class _MonthArrow extends StatelessWidget {
-  const _MonthArrow({required this.pointLeft, required this.onTap});
+  const _MonthArrow({
+    required this.pointLeft,
+    required this.onTap,
+    required this.color,
+  });
 
   final bool pointLeft;
   final VoidCallback onTap;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -291,7 +313,7 @@ class _MonthArrow extends StatelessWidget {
           size: const Size(9, 20),
           painter: _ChevronPainter(
             pointLeft: pointLeft,
-            color: Colors.white54,
+            color: color,
             strokeWidth: 2.4, // thin stroke
           ),
         ),

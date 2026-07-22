@@ -13,6 +13,7 @@ class AppConstants {
   // ---- Keys used inside the settings box ----
   static const String themeModeKey = 'theme_mode';
   static const String othersRemovedKey = 'others_removed_v1';
+  static const String emojiRepairKey = 'emoji_icons_repaired_v1';
 
   // ---- Hive type IDs (each @HiveType model needs a UNIQUE id) ----
   // Never reuse or reorder these once data has been saved on a device.
