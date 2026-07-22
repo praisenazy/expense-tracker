@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme/app_theme.dart';
-import 'features/root/root_screen.dart';
+import 'features/splash/splash_screen.dart';
 import 'providers/theme_provider.dart';
 
 /// Root of the app.
@@ -24,7 +24,7 @@ class ExpenseTrackerApp extends ConsumerWidget {
       theme: AppTheme.light(seed),
       darkTheme: AppTheme.dark(seed),
       themeMode: themeMode, // light / dark / system
-      home: const RootScreen(),
+      home: const SplashScreen(),
     );
   }
 }
