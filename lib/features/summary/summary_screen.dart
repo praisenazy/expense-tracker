@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
@@ -25,15 +26,19 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
 
   // Distinct color per category, assigned by rank (biggest first). Cycles if
   // there are more categories than colors.
+  // Segment colors assigned by rank — biggest spending first — exactly per the
+  // reference design.
   static const List<Color> _palette = [
-    Color(0xFFE0544C), // red — biggest slice
-    Color(0xFFF2994A), // orange
-    Color(0xFFF6C945), // yellow
-    Color(0xFF27AE60), // green
-    Color(0xFF2D9CDB), // blue
-    Color(0xFF9B51E0), // purple
-    Color(0xFFEB5E8B), // pink
-    Color(0xFF00BCD4), // teal
+    Color(0xFFF05A28), // largest
+    Color(0xFFF2385A), // 2nd
+    Color(0xFF7B2FBE), // 3rd
+    Color(0xFF9C27B0), // 4th
+    Color(0xFF4A90D9), // 5th
+    Color(0xFF5BC8F5), // 6th
+    Color(0xFF3DBFA8), // 7th
+    Color(0xFF4CAF50), // 8th
+    Color(0xFF2E7D32), // 9th
+    Color(0xFF8BC34A), // smallest
   ];
   static const Color _expenseColor = Color(0xFFE0544C);
   static const Color _incomeColor = Color(0xFF27AE60);
@@ -142,12 +147,7 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                         _Donut(
                           entries: entries,
                           colorFor: _colorFor,
-                          centerColor: _amber,
-                          // Black shadow vanishes on dark backgrounds, so use a
-                          // red-tinted glow (the slice's color) in dark mode.
-                          shadowColor: theme.brightness == Brightness.dark
-                              ? _palette.first.withValues(alpha: 0.55)
-                              : Colors.black.withValues(alpha: 0.30),
+                          isIncome: _showIncome,
                           onSwap: () =>
                               setState(() => _showIncome = !_showIncome),
                         ),
@@ -155,6 +155,7 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                         for (var i = 0; i < entries.length; i++)
                           _CategoryRow(
                             color: _colorFor(i, entries.length),
+                            emoji: entries[i].key.emoji,
                             name: entries[i].key.name,
                             percent: total == 0
                                 ? 0
@@ -240,32 +241,66 @@ class _ToggleSide extends StatelessWidget {
   }
 }
 
-/// Donut chart with a "Category" center label and a swap control.
-class _Donut extends StatelessWidget {
+/// Donut chart matching the reference design: a "Total" label in the center,
+/// each category's emoji in a white circle around the ring, a percentage by
+/// each slice, and — when a slice is tapped — its amount popping out for a few
+/// seconds. Tapping the center swaps between expense and income.
+class _Donut extends StatefulWidget {
   const _Donut({
     required this.entries,
     required this.colorFor,
-    required this.centerColor,
-    required this.shadowColor,
     required this.onSwap,
+    required this.isIncome,
   });
 
   final List<MapEntry<Category, double>> entries;
   final Color Function(int index, int count) colorFor;
-  final Color centerColor;
-  final Color shadowColor;
   final VoidCallback onSwap;
+  final bool isIncome;
 
-  // Donut geometry.
-  static const double _centerSpace = 68;
-  static const double _baseRadius = 30;
-  static const double _topRadius = 38; // the biggest slice pops out a bit
+  @override
+  State<_Donut> createState() => _DonutState();
+}
+
+class _DonutState extends State<_Donut> {
+  // Donut geometry (radii measured from the chart center).
+  static const double _centerSpace = 84; // empty hole for the total label
+  static const double _ringRadius = 65; // ring thickness (bigger, wider ring)
+  // Icons float just OUTSIDE the ring's outer edge, at each segment's edge.
+  static const double _rIcon = _centerSpace + _ringRadius + 13;
+  static const double _height = 360;
+
+  // The slice the user last tapped; its amount pops out for a few seconds.
+  int? _selected;
+  Timer? _revertTimer;
+
+  @override
+  void dispose() {
+    _revertTimer?.cancel();
+    super.dispose();
+  }
+
+  void _selectSlice(int entryIndex) {
+    setState(() => _selected = entryIndex);
+    _revertTimer?.cancel();
+    _revertTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _selected = null);
+    });
+  }
+
+  /// A point at [radius] from the center on the given slice-[fraction]
+  /// (0 = top, increasing clockwise), for placing labels/icons/bubbles.
+  Offset _polar(double fraction, double radius) {
+    final theta = fraction * 2 * math.pi;
+    return Offset(radius * math.sin(theta), -radius * math.cos(theta));
+  }
 
   @override
   Widget build(BuildContext context) {
+    final entries = widget.entries;
     final muted = Theme.of(
       context,
-    ).colorScheme.onSurface.withValues(alpha: 0.5);
+    ).colorScheme.onSurface.withValues(alpha: 0.55);
 
     // Give every category a minimum wedge so tiny ones stay visible on the
     // ring (the list below still shows the true amounts/percentages).
@@ -275,86 +310,184 @@ class _Donut extends StatelessWidget {
       for (final e in entries) math.max(e.value, minValue),
     ];
     final displayTotal = displayValues.fold<double>(0, (sum, v) => sum + v);
-    // Sweep (radians) of the largest slice, starting at the top (-90°).
-    final topSweep = displayTotal == 0
-        ? 0.0
-        : (displayValues.first / displayTotal) * 2 * math.pi;
+
+    // Mid-angle fraction of each slice — where its icon/label/bubble sits.
+    final midFrac = <double>[];
+    var before = 0.0;
+    for (var i = 0; i < entries.length; i++) {
+      midFrac.add(
+        displayTotal == 0 ? 0 : (before + displayValues[i] / 2) / displayTotal,
+      );
+      before += displayValues[i];
+    }
+
+    final sections = [
+      for (var i = 0; i < entries.length; i++)
+        PieChartSectionData(
+          value: displayValues[i],
+          color: widget.colorFor(i, entries.length),
+          radius: _ringRadius + (_selected == i ? 10 : 0), // tapped pops out
+          // Percentage sits INSIDE the slice, in white.
+          showTitle: true,
+          title:
+              '${(rawTotal == 0 ? 0 : entries[i].value / rawTotal * 100).round()}%',
+          titlePositionPercentageOffset: 0.5,
+          titleStyle: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: 12,
+          ),
+        ),
+    ];
 
     return SizedBox(
-      height: 230,
+      height: _height,
       child: Stack(
         alignment: Alignment.center,
+        clipBehavior: Clip.none, // let icons/labels sit outside the ring
         children: [
-          // Soft drop shadow under the biggest (red) slice.
-          Positioned.fill(
-            child: CustomPaint(
-              painter: _SliceShadowPainter(
-                startRadians: -math.pi / 2,
-                sweepRadians: topSweep,
-                ringRadius: _centerSpace + _topRadius / 2,
-                strokeWidth: _topRadius,
-                color: shadowColor,
+          PieChart(
+            PieChartData(
+              sectionsSpace: 2,
+              centerSpaceRadius: _centerSpace,
+              startDegreeOffset: -90, // first slice starts at the top
+              pieTouchData: PieTouchData(
+                touchCallback: (event, response) {
+                  if (event is! FlTapUpEvent) return;
+                  final i = response?.touchedSection?.touchedSectionIndex ?? -1;
+                  if (i >= 0 && i < entries.length) _selectSlice(i);
+                },
+              ),
+              sections: sections,
+            ),
+          ),
+
+          // Center total — tap to swap expense/income.
+          GestureDetector(
+            onTap: widget.onSwap,
+            behavior: HitTestBehavior.opaque,
+            child: _centerTotal(rawTotal, muted),
+          ),
+
+          // Emoji icon circles sitting on the ring's outer edge. The tapped
+          // slice shows its amount bubble instead of the icon.
+          for (var i = 0; i < entries.length; i++)
+            if (_selected != i)
+              Align(
+                child: Transform.translate(
+                  offset: _polar(midFrac[i], _rIcon),
+                  child: _iconCircle(
+                    entries[i].key,
+                    widget.colorFor(i, entries.length),
+                  ),
+                ),
+              ),
+
+          // Amount bubble that pops out where the tapped slice's icon was.
+          if (_selected != null)
+            Align(
+              child: Transform.translate(
+                offset: _polar(midFrac[_selected!], _rIcon),
+                child: _amountBubble(entries[_selected!]),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _centerTotal(double total, Color muted) {
+    return SizedBox(
+      width: 116,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            widget.isIncome ? 'Total Income' : 'Total Expenses',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: muted,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              Formatters.money(total),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
-          PieChart(
-            PieChartData(
-              sectionsSpace: 3, // normal gap between slices
-              centerSpaceRadius: _centerSpace,
-              startDegreeOffset: -90,
-              sections: [
-                for (var i = 0; i < entries.length; i++) ...[
-                  PieChartSectionData(
-                    value: displayValues[i],
-                    color: colorFor(i, entries.length),
-                    radius: i == 0 ? _topRadius : _baseRadius,
-                    showTitle: false,
-                  ),
-                  // Hair-thin transparent spacer after the red slice: the 4px
-                  // gap on each side of it makes red's gap ~8px.
-                  if (i == 0 && entries.length > 1)
-                    PieChartSectionData(
-                      value:
-                          displayTotal * 0.004, // widen red's gap — adjust me
-                      color: Colors.transparent,
-                      radius: _baseRadius,
-                      showTitle: false,
-                    ),
-                ],
-                // Extra gap before red (the ring wraps around to it).
-                if (entries.length > 1)
-                  PieChartSectionData(
-                    value: displayTotal * 0.004, // widen red's gap — adjust me
-                    color: Colors.transparent,
-                    radius: _baseRadius,
-                    showTitle: false,
-                  ),
-              ],
-            ),
-          ),
-          // Center label.
-          GestureDetector(
-            onTap: onSwap,
-            behavior: HitTestBehavior.opaque,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.local_offer_outlined, color: muted, size: 20),
-                const SizedBox(height: 4),
-                Text(
-                  'Category',
-                  style: TextStyle(
-                    color: muted,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Icon(Icons.swap_horiz_rounded, color: centerColor, size: 22),
-              ],
-            ),
+        ],
+      ),
+    );
+  }
+
+  /// A category's emoji in a white circle with a colored ring — the badges
+  /// sitting around the donut in the reference design.
+  Widget _iconCircle(Category category, Color color) {
+    return Container(
+      width: 60,
+      height: 60,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: color, width: 3),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
         ],
+      ),
+      child: Text(category.emoji, style: const TextStyle(fontSize: 26)),
+    );
+  }
+
+  /// The amount bubble that pops out on the tapped slice, with a white ring
+  /// and a bouncy entrance (like the reference).
+  Widget _amountBubble(MapEntry<Category, double> entry) {
+    final sign = widget.isIncome ? '' : '-';
+    final color = widget.colorFor(_selected!, widget.entries.length);
+
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(_selected),
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutBack,
+      builder: (context, t, child) => Opacity(
+        opacity: t.clamp(0.0, 1.0),
+        child: Transform.scale(scale: 0.6 + 0.4 * t, child: child),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.5),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Text(
+          '$sign${Formatters.money(entry.value)}',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
       ),
     );
   }
@@ -364,6 +497,7 @@ class _Donut extends StatelessWidget {
 class _CategoryRow extends StatelessWidget {
   const _CategoryRow({
     required this.color,
+    required this.emoji,
     required this.name,
     required this.percent,
     required this.amountText,
@@ -371,6 +505,7 @@ class _CategoryRow extends StatelessWidget {
   });
 
   final Color color;
+  final String emoji;
   final String name;
   final double percent;
   final String amountText;
@@ -379,47 +514,52 @@ class _CategoryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurface.withValues(alpha: 0.5);
 
     return Column(
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppConstants.spaceM,
-            vertical: 12,
+            vertical: 10,
           ),
           child: Row(
             children: [
+              // Emoji in a colored circle matching the segment color.
               Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.22),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(emoji, style: const TextStyle(fontSize: 20)),
               ),
               const SizedBox(width: AppConstants.spaceM),
+              // Category name.
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${percent.toStringAsFixed(2)}%',
-                      style: TextStyle(
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.5,
-                        ),
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-              const SizedBox(width: AppConstants.spaceS),
+              // Percentage.
+              Text(
+                '${percent.toStringAsFixed(0)}%',
+                style: TextStyle(
+                  color: muted,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: AppConstants.spaceM),
+              // Amount.
               Flexible(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
@@ -429,7 +569,7 @@ class _CategoryRow extends StatelessWidget {
                     style: TextStyle(
                       color: amountColor,
                       fontSize: 16,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
@@ -441,47 +581,4 @@ class _CategoryRow extends StatelessWidget {
       ],
     );
   }
-}
-
-/// Paints a soft, blurred drop shadow under a single donut slice (the biggest
-/// one), offset down-right so the slice looks raised — like the reference.
-class _SliceShadowPainter extends CustomPainter {
-  _SliceShadowPainter({
-    required this.startRadians,
-    required this.sweepRadians,
-    required this.ringRadius,
-    required this.strokeWidth,
-    required this.color,
-  });
-
-  final double startRadians;
-  final double sweepRadians;
-  final double ringRadius;
-  final double strokeWidth;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (sweepRadians <= 0) return;
-    final center = Offset(size.width / 2, size.height / 2);
-    final rect = Rect.fromCircle(
-      center: center + const Offset(4, 8), // push the shadow down-right
-      radius: ringRadius,
-    );
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-    canvas.drawArc(rect, startRadians, sweepRadians, false, paint);
-  }
-
-  @override
-  bool shouldRepaint(_SliceShadowPainter old) =>
-      old.startRadians != startRadians ||
-      old.sweepRadians != sweepRadians ||
-      old.ringRadius != ringRadius ||
-      old.strokeWidth != strokeWidth ||
-      old.color != color;
 }

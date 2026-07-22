@@ -273,8 +273,13 @@ class _AddEditTransactionScreenState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    // Only the categories for the currently-selected side (income or expense).
-    final categories = ref.watch(categoriesByKindProvider(_type));
+    // The reusable categories for the current side, plus the selected one even
+    // if it's a "use once" category (so it still shows on its transaction).
+    final categories = [...ref.watch(categoriesByKindProvider(_type))];
+    if (_categoryId != null && categories.every((c) => c.id != _categoryId)) {
+      final selected = ref.watch(categoryByIdProvider)[_categoryId];
+      if (selected != null) categories.add(selected);
+    }
 
     return Scaffold(
       backgroundColor: isDark ? null : const Color(0xFFF4F5FA),

@@ -42,11 +42,13 @@ class CategoriesNotifier extends Notifier<List<Category>> {
   }
 }
 
-/// Categories for one side (income or expense). `.family` takes the kind.
+/// Reusable categories for one side (income or expense) — the ones shown as
+/// chips in the picker and counted toward the per-side limit. "Use once"
+/// categories (reusable == false) are excluded. `.family` takes the kind.
 final categoriesByKindProvider =
     Provider.family<List<Category>, TransactionType>((ref, kind) {
   final all = ref.watch(categoriesProvider);
-  return all.where((c) => c.kind == kind).toList();
+  return all.where((c) => c.kind == kind && c.reusable).toList();
 });
 
 /// id -> Category lookup, so a transaction row can resolve its category fast.

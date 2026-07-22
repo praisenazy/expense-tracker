@@ -138,12 +138,22 @@ class _CategoryEditorScreenState extends ConsumerState<CategoryEditorScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // For a NEW category, ask whether to keep it in the reusable list or just
+    // use it once. Editing preserves the category's existing choice.
+    var reusable = widget.existing?.reusable ?? true;
+    if (!_isEditing) {
+      final choice = await _askSaveToList();
+      if (choice == null) return; // dismissed → don't save at all
+      reusable = choice;
+    }
+
     final category = Category(
       id: widget.existing?.id ?? const Uuid().v4(),
       name: _nameController.text.trim(),
       kind: widget.existing?.kind ?? widget.kind,
       iconCodePoint: _iconCodePoint,
       colorValue: _colorValue,
+      reusable: reusable,
     );
 
     final notifier = ref.read(categoriesProvider.notifier);
@@ -153,6 +163,154 @@ class _CategoryEditorScreenState extends ConsumerState<CategoryEditorScreen> {
       await notifier.add(category);
     }
     if (mounted) Navigator.of(context).pop(category);
+  }
+
+  /// Asks whether to keep the new category for reuse (true), use it just once
+  /// (false), or cancel (null) — as a bottom sheet.
+  Future<bool?> _askSaveToList() {
+    final name = _nameController.text.trim();
+    final theme = Theme.of(context);
+    final accent = _color; // the color the user picked for this category
+    // Two-tone gradient in the category's own color family (like the image):
+    // the picked color on the left, a hue-shifted sibling on the right.
+    final accentHsl = HSLColor.fromColor(accent);
+    final gradientEnd = accentHsl
+        .withHue((accentHsl.hue + 35) % 360)
+        .withLightness((accentHsl.lightness + 0.05).clamp(0.0, 1.0))
+        .toColor();
+    final gradient = LinearGradient(
+      colors: [accent, gradientEnd],
+      begin: Alignment.centerLeft,
+      end: Alignment.centerRight,
+    );
+
+    return showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      builder: (sheetCtx) => Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Bookmark badge with sparkles.
+                SparkleDecoration(
+                  height: 92,
+                  child: Container(
+                    width: 66,
+                    height: 66,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.bookmark_rounded, color: accent, size: 30),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Save this category',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text.rich(
+                  TextSpan(
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.4,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                    children: [
+                      const TextSpan(text: 'Save '),
+                      TextSpan(
+                        text: '“$name”',
+                        style: TextStyle(
+                          color: _color,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const TextSpan(
+                        text: ' to your categories for\nfuture use.',
+                      ),
+                    ],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 18),
+                const Divider(height: 1),
+                const SizedBox(height: 10),
+                // Just use once.
+                TextButton(
+                  onPressed: () => Navigator.of(sheetCtx).pop(false),
+                  child: Text(
+                    'Use once',
+                    style: TextStyle(
+                      color: accent,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Save to list (gradient button).
+                Material(
+                  color: Colors.transparent,
+                  child: Ink(
+                    decoration: BoxDecoration(
+                      gradient: gradient,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: accent.withValues(alpha: 0.35),
+                          blurRadius: 14,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () => Navigator.of(sheetCtx).pop(true),
+                      child: Container(
+                        height: 54,
+                        alignment: Alignment.center,
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.bookmark_rounded,
+                                color: Colors.white, size: 20),
+                            SizedBox(width: 8),
+                            Text(
+                              'Save to list',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _openPreview() async {
@@ -255,27 +413,44 @@ class _CategoryEditorScreenState extends ConsumerState<CategoryEditorScreen> {
 
             const SizedBox(height: AppConstants.spaceL),
 
-            // ---- Bottom action ----
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: _color,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size.fromHeight(54),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+            // ---- Bottom actions: explicit Cancel / Save (never auto-saves) ----
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(54),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ),
-                onPressed: _save,
-                icon: const Icon(Icons.check_rounded),
-                label: Text(
-                  _customTab
-                      ? 'Apply Color'
-                      : (_isEditing ? 'Save Changes' : 'Add Category'),
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+                const SizedBox(width: AppConstants.spaceM),
+                Expanded(
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _color,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(54),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    onPressed: _save,
+                    icon: const Icon(Icons.check_rounded),
+                    label: Text(
+                      _isEditing ? 'Save Changes' : 'Save Category',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ],
         ),

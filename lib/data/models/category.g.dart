@@ -22,13 +22,15 @@ class CategoryAdapter extends TypeAdapter<Category> {
       iconCodePoint: (fields[2] as num).toInt(),
       colorValue: (fields[3] as num).toInt(),
       kind: fields[4] as TransactionType,
+      // Older records have no field 5 — treat them as reusable.
+      reusable: fields[5] as bool? ?? true,
     );
   }
 
   @override
   void write(BinaryWriter writer, Category obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -38,7 +40,9 @@ class CategoryAdapter extends TypeAdapter<Category> {
       ..writeByte(3)
       ..write(obj.colorValue)
       ..writeByte(4)
-      ..write(obj.kind);
+      ..write(obj.kind)
+      ..writeByte(5)
+      ..write(obj.reusable);
   }
 
   @override

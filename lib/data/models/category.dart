@@ -20,6 +20,7 @@ class Category {
     required this.iconCodePoint,
     required this.colorValue,
     required this.kind,
+    this.reusable = true,
   });
 
   /// Stable unique id (uuid). Transactions reference this.
@@ -42,6 +43,13 @@ class Category {
   @HiveField(4)
   final TransactionType kind;
 
+  /// Whether this category is saved to the reusable category list (shown as a
+  /// chip). A "use once" category (created for a single transaction) is stored
+  /// with `false` so the transaction still resolves it, but it stays out of the
+  /// picker/section. Defaults to true (including all built-in categories).
+  @HiveField(5)
+  final bool reusable;
+
   /// The emoji to display, rebuilt from the stored code point.
   String get emoji => String.fromCharCode(iconCodePoint);
 
@@ -54,6 +62,7 @@ class Category {
     int? iconCodePoint,
     int? colorValue,
     TransactionType? kind,
+    bool? reusable,
   }) {
     return Category(
       id: id ?? this.id,
@@ -61,6 +70,7 @@ class Category {
       iconCodePoint: iconCodePoint ?? this.iconCodePoint,
       colorValue: colorValue ?? this.colorValue,
       kind: kind ?? this.kind,
+      reusable: reusable ?? this.reusable,
     );
   }
 }

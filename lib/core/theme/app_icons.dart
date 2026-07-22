@@ -52,9 +52,25 @@ class AppIcons {
     ('🥨', 'food', ['pretzel', 'snack', 'food']),
     ('🌽', 'food', ['corn', 'maize', 'vegetable', 'food']),
     ('🥕', 'food', ['carrot', 'vegetable', 'food', 'veg']),
-    ('🥔', 'food', ['potato', 'vegetable', 'food']),
+    ('🥔', 'food', ['potato', 'potatoes', 'yam', 'vegetable', 'food']),
     ('🍄', 'food', ['mushroom', 'food']),
     ('🥜', 'food', ['peanut', 'nuts', 'groundnut', 'food']),
+
+    // ---- Vegetables, spices & cooking ingredients (groceries) ----
+    ('🧅', 'food', ['onion', 'onions', 'vegetable', 'veg', 'ingredient', 'groceries']),
+    ('🫑', 'food', ['pepper', 'peppers', 'bellpepper', 'capsicum', 'chili', 'chilli', 'spicy', 'vegetable', 'ingredient', 'groceries']),
+    ('🧄', 'food', ['garlic', 'spice', 'seasoning', 'ingredient', 'vegetable']),
+    ('🫚', 'food', ['ginger', 'root', 'spice', 'ingredient']),
+    ('🧂', 'food', ['salt', 'seasoning', 'spice', 'condiment', 'maggi', 'ingredient']),
+    ('🍅', 'food', ['tomato', 'tomatoes', 'vegetable', 'veg', 'ingredient', 'groceries']),
+    ('🥬', 'food', ['lettuce', 'cabbage', 'spinach', 'greens', 'vegetable', 'veg', 'ugu', 'ingredient']),
+    ('🥦', 'food', ['broccoli', 'vegetable', 'veg', 'greens']),
+    ('🥒', 'food', ['cucumber', 'pickle', 'vegetable', 'veg']),
+    ('🍆', 'food', ['eggplant', 'aubergine', 'garden egg', 'vegetable', 'veg']),
+    ('🫘', 'food', ['beans', 'bean', 'legume', 'food', 'groceries']),
+    ('🫛', 'food', ['peas', 'pea', 'legume', 'vegetable']),
+    ('🧈', 'food', ['butter', 'margarine', 'dairy', 'ingredient']),
+    ('🫙', 'food', ['jar', 'spice', 'storage', 'container', 'provisions']),
 
     // ---- Sweets & desserts ----
     ('🍫', 'sweets', ['chocolate', 'choc', 'cocoa', 'candy', 'sweet', 'dessert', 'food']),
@@ -103,7 +119,7 @@ class AppIcons {
     ('🧉', 'drink', ['mate', 'drink']),
 
     // ---- Groceries / shopping ----
-    ('🛒', 'shopping', ['groceries', 'grocery', 'shopping', 'supermarket', 'cart']),
+    ('🛒', 'shopping', ['groceries', 'grocery', 'shopping', 'supermarket', 'cart', 'provisions', 'foodstuff', 'market', 'ingredients', 'staples']),
     ('👜', 'shopping', ['bag', 'handbag', 'shopping', 'buy', 'purse']),
     ('🎀', 'shopping', ['gift', 'bow', 'wrap']),
     ('🏬', 'shopping', ['mall', 'store', 'shopping', 'department']),

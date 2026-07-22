@@ -24,4 +24,11 @@ void main() {
     expect(AppIcons.suggest('choc').first, '🍫'); // prefix
     expect(AppIcons.suggest('cookies').first, '🍪'); // plural
   });
+
+  test('cooking ingredients now resolve', () {
+    expect(AppIcons.suggest('onions').first, '🧅');
+    expect(AppIcons.suggest('pepper').first, '🫑');
+    expect(AppIcons.suggest('tomato').first, '🍅');
+    expect(AppIcons.suggest('beans').first, '🫘');
+  });
 }
