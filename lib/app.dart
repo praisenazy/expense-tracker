@@ -16,12 +16,13 @@ class ExpenseTrackerApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
+    final seed = ref.watch(themeColorProvider);
 
     return MaterialApp(
       title: 'Expense Tracker',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
+      theme: AppTheme.light(seed),
+      darkTheme: AppTheme.dark(seed),
       themeMode: themeMode, // light / dark / system
       home: const RootScreen(),
     );

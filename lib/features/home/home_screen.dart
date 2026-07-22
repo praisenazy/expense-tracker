@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_constants.dart';
-import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/transaction.dart';
 import '../../providers/category_providers.dart';
@@ -11,6 +10,7 @@ import '../../providers/theme_provider.dart';
 import '../../providers/transaction_providers.dart';
 import '../add_edit/add_edit_transaction_screen.dart';
 import '../shared/empty_state.dart';
+import 'widgets/theme_color_sheet.dart';
 import 'widgets/transaction_tile.dart';
 
 /// The home dashboard: a full-bleed colored header (balance + income/expense
@@ -19,8 +19,6 @@ import 'widgets/transaction_tile.dart';
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
-  // Fixed brand color for the header so it stays readable in light & dark.
-  static const Color _header = AppColors.seed;
   static const Color _darkCard = Color(0xFF2A2D3A);
   static const Color _green = Color(0xFF2BD17E);
   static const Color _red = Color(0xFFFF6B6B);
@@ -53,10 +51,10 @@ class HomeScreen extends ConsumerWidget {
     final remainingBalance =
         summary.balance < 0 ? 0.0 : summary.balance;
 
-    // Header color: the indigo brand band in light mode, but the dark theme
-    // background in dark mode so the top blends in (like the design) instead of
-    // showing a bright indigo block.
-    final headerColor = isDark ? theme.colorScheme.surface : _header;
+    // The user's chosen theme color drives the light-mode header band; in dark
+    // mode the header uses the dark theme background so it blends in.
+    final themeColor = ref.watch(themeColorProvider);
+    final headerColor = isDark ? theme.colorScheme.surface : themeColor;
     final accent = isDark ? theme.colorScheme.primary : Colors.white;
 
     return Scaffold(
@@ -102,6 +100,34 @@ class HomeScreen extends ConsumerWidget {
                           onPressed: () => ref
                               .read(themeModeProvider.notifier)
                               .toggleDark(!isDark),
+                        ),
+                        // Theme color: a circle of the current color that opens
+                        // the color picker.
+                        InkWell(
+                          onTap: () => showThemeColorSheet(context),
+                          customBorder: const CircleBorder(),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: themeColor,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                  width: 2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.2),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
                       ],
                     ),

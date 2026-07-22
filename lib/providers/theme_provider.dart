@@ -9,6 +9,44 @@ final settingsBoxProvider = Provider<Box>((ref) {
   return Hive.box(AppConstants.settingsBox);
 });
 
+/// A selectable app theme color (name + color).
+class ThemeColorOption {
+  const ThemeColorOption(this.name, this.color);
+  final String name;
+  final Color color;
+}
+
+/// The 6 theme colors the user can choose from. The first is the default.
+const List<ThemeColorOption> kThemeColors = [
+  ThemeColorOption('Ocean Blue', Color(0xFF2196F3)),
+  ThemeColorOption('Royal Purple', Color(0xFF7B2FBE)),
+  ThemeColorOption('Sunset Orange', Color(0xFFF05A28)),
+  ThemeColorOption('Emerald Green', Color(0xFF2E7D32)),
+  ThemeColorOption('Rose Pink', Color(0xFFE91E8C)),
+  ThemeColorOption('Crimson Red', Color(0xFFE53935)),
+];
+
+/// The chosen theme (seed) color, persisted to Hive so it survives restarts.
+/// Defaults to Ocean Blue the first time.
+final themeColorProvider =
+    NotifierProvider<ThemeColorNotifier, Color>(ThemeColorNotifier.new);
+
+class ThemeColorNotifier extends Notifier<Color> {
+  Box get _box => ref.read(settingsBoxProvider);
+
+  @override
+  Color build() {
+    final saved = _box.get(AppConstants.themeColorKey) as int?;
+    return saved != null ? Color(saved) : kThemeColors.first.color;
+  }
+
+  /// Pick a new theme color and remember it.
+  Future<void> setColor(Color color) async {
+    state = color; // repaints the whole app immediately
+    await _box.put(AppConstants.themeColorKey, color.toARGB32());
+  }
+}
+
 /// Current theme mode (light / dark / system), persisted to Hive so the
 /// choice survives app restarts.
 final themeModeProvider =

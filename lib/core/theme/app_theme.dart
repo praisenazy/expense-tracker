@@ -1,36 +1,44 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'app_colors.dart';
-
 /// Defines the light and dark themes for the whole app.
 ///
-/// `MaterialApp` is given `theme: AppTheme.light` and `darkTheme: AppTheme.dark`,
-/// then a `ThemeMode` decides which one is shown. Dark mode "just works"
-/// because both themes are fully defined here.
+/// `MaterialApp` is given `theme: AppTheme.light(seed)` and
+/// `darkTheme: AppTheme.dark(seed)`, then a `ThemeMode` decides which one is
+/// shown. The [seed] is the user's chosen theme color, so the whole palette
+/// re-derives when they pick a new one.
 class AppTheme {
   AppTheme._();
 
-  /// Light theme.
-  static ThemeData get light => _base(Brightness.light);
+  /// Light theme built from the chosen [seed] color.
+  static ThemeData light(Color seed) => _base(Brightness.light, seed);
 
-  /// Dark theme.
-  static ThemeData get dark => _base(Brightness.dark);
+  /// Dark theme built from the chosen [seed] color.
+  static ThemeData dark(Color seed) => _base(Brightness.dark, seed);
 
   /// Shared builder so light & dark don't duplicate settings.
-  /// Only the [brightness] differs; the seed color generates the rest.
-  static ThemeData _base(Brightness brightness) {
+  /// Only the [brightness] differs; the [seed] color generates the rest.
+  static ThemeData _base(Brightness brightness, Color seed) {
     // From ONE seed color, Material 3 generates a full, harmonious palette
     // that adapts to light or dark automatically.
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.seed,
+      seedColor: seed,
       brightness: brightness,
     );
+
+    // No ink splash / highlight anywhere when tapping.
+    final noOverlay = WidgetStateProperty.all<Color>(Colors.transparent);
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: colorScheme.surface,
+
+      // Kill the tap ripple/highlight globally (InkWell, ListTile, chips, etc.).
+      splashFactory: NoSplash.splashFactory,
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      hoverColor: Colors.transparent,
 
       // Apply the "Inter" font to all text, tinted for the current brightness.
       textTheme: GoogleFonts.interTextTheme(
@@ -71,14 +79,26 @@ class AppTheme {
         ),
       ),
 
-      // Rounded, comfortable buttons.
+      // Rounded, comfortable buttons — all with no tap overlay.
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           minimumSize: const Size.fromHeight(52),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-        ),
+        ).copyWith(overlayColor: noOverlay),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: ButtonStyle(overlayColor: noOverlay),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: ButtonStyle(overlayColor: noOverlay),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ButtonStyle(overlayColor: noOverlay),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: ButtonStyle(overlayColor: noOverlay),
       ),
     );
   }
