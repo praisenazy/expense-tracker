@@ -18,7 +18,8 @@ void main() {
     // Before typing: an expense default (burger) is suggested.
     expect(find.text('🍔'), findsWidgets);
 
-    await tester.enterText(find.byType(TextFormField), 'chocolate');
+    // The name field is the first TextFormField (a budget field follows it).
+    await tester.enterText(find.byType(TextFormField).first, 'chocolate');
     await tester.pumpAndSettle();
 
     // After typing "chocolate", the chocolate emoji should be suggested.

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,6 +10,7 @@ import '../../providers/category_providers.dart';
 import '../../providers/summary_providers.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/transaction_providers.dart';
+import '../../providers/user_provider.dart';
 import '../add_edit/add_edit_transaction_screen.dart';
 import '../shared/empty_state.dart';
 import 'widgets/theme_color_sheet.dart';
@@ -22,6 +25,15 @@ class HomeScreen extends ConsumerWidget {
   static const Color _darkCard = Color(0xFF2A2D3A);
   static const Color _green = Color(0xFF2BD17E);
   static const Color _red = Color(0xFFFF6B6B);
+
+  /// The time-of-day part of the greeting ("Good morning" etc). The name is
+  /// rendered on its own line by [_AnimatedGreeting].
+  String _greetingPart() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
 
   // The full-width income/expense card extends well below the sheet's top so
   // it sits behind the sheet's rounded corner notches (covering the header
@@ -57,6 +69,13 @@ class HomeScreen extends ConsumerWidget {
     final headerColor = isDark ? theme.colorScheme.surface : themeColor;
     final accent = isDark ? theme.colorScheme.primary : Colors.white;
 
+    // The income/expense card: the fixed dark card on the colored header in
+    // light mode, but a subtle tint of the theme color in dark mode so it
+    // coordinates instead of reading as flat gray.
+    final cardColor = isDark
+        ? Color.lerp(theme.colorScheme.surface, themeColor, 0.16)!
+        : _darkCard;
+
     return Scaffold(
       backgroundColor: headerColor,
       body: Column(
@@ -80,13 +99,11 @@ class HomeScreen extends ConsumerWidget {
                     ),
                     child: Row(
                       children: [
-                        const Text(
-                          'Expense Tracker',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                          ),
+                        _AnimatedGreeting(
+                          greeting: _greetingPart(),
+                          name: ref.watch(userNameProvider),
+                          baseColor: accent,
+                          isDark: isDark,
                         ),
                         const Spacer(),
                         IconButton(
@@ -174,16 +191,22 @@ class HomeScreen extends ConsumerWidget {
                             ? theme.colorScheme.primary
                             : Colors.white54,
                       ),
-                      // Shrink big amounts to fit instead of overflowing.
+                      // Shrink big amounts to fit; count up to the value so the
+                      // balance feels alive when it loads or the month changes.
                       Expanded(
                         child: FittedBox(
                           fit: BoxFit.scaleDown,
-                          child: Text(
-                            Formatters.money(remainingBalance),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 40,
-                              fontWeight: FontWeight.w800,
+                          child: TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0, end: remainingBalance),
+                            duration: const Duration(milliseconds: 700),
+                            curve: Curves.easeOutCubic,
+                            builder: (context, value, _) => Text(
+                              Formatters.money(value),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 40,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
                         ),
@@ -220,8 +243,8 @@ class HomeScreen extends ConsumerWidget {
                         AppConstants.spaceM,
                         AppConstants.spaceL,
                       ),
-                      decoration: const BoxDecoration(
-                        color: _darkCard,
+                      decoration: BoxDecoration(
+                        color: cardColor,
                         borderRadius: BorderRadius.vertical(
                           top: Radius.circular(16),
                         ),
@@ -296,10 +319,11 @@ class HomeScreen extends ConsumerWidget {
                         Expanded(
                           child: transactions.isEmpty
                               ? const EmptyState(
-                                  icon: Icons.receipt_long_rounded,
-                                  title: 'No transactions yet',
+                                  icon: Icons.savings_rounded,
+                                  title: 'Start your money story 💸',
                                   message:
-                                      'Tap the + button to add your first income or expense.',
+                                      'Tap ➕ below to log your first transaction — '
+                                      'it only takes a few seconds.',
                                 )
                               : _TransactionList(transactions: transactions),
                         ),
@@ -314,6 +338,147 @@ class HomeScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// The header greeting with a flowing shimmer sweep across the text and a
+/// waving hand — a small, lively touch that works on any theme color.
+class _AnimatedGreeting extends StatefulWidget {
+  const _AnimatedGreeting({
+    required this.greeting,
+    required this.name,
+    required this.baseColor,
+    required this.isDark,
+  });
+
+  final String greeting; // "Good evening"
+  final String name; // "" when unset
+  final Color baseColor; // white on the colored header, theme color on dark
+  final bool isDark;
+
+  @override
+  State<_AnimatedGreeting> createState() => _AnimatedGreetingState();
+}
+
+class _AnimatedGreetingState extends State<_AnimatedGreeting>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasName = widget.name.trim().isNotEmpty;
+
+    // A bright, wide highlight so the sweep really pops: a vivid gold glint on
+    // the light header, near-white on the dark one.
+    final highlight =
+        widget.isDark ? Colors.white : const Color(0xFFFFD24D);
+
+    // Line 1: the greeting. Line 2: the (bold) name + waving hand.
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          hasName ? '${widget.greeting},' : widget.greeting,
+          maxLines: 1,
+          style: const TextStyle(
+            color: Colors.white, // masked by the gradient below
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (hasName)
+              Text(
+                widget.name,
+                maxLines: 1,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900, // bold name
+                  height: 1.05,
+                ),
+              ),
+            const SizedBox(width: 6),
+            _WavingHand(controller: _controller, size: hasName ? 24 : 20),
+          ],
+        ),
+      ],
+    );
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final slide = _controller.value * 2 - 1; // -1 → 1
+        return ShaderMask(
+          blendMode: BlendMode.srcIn,
+          shaderCallback: (rect) => LinearGradient(
+            colors: [
+              widget.baseColor,
+              highlight,
+              highlight,
+              widget.baseColor,
+            ],
+            stops: const [0.15, 0.45, 0.55, 0.85],
+            transform: _SlidingGradient(slide),
+          ).createShader(rect),
+          child: child,
+        );
+      },
+      child: content,
+    );
+  }
+}
+
+/// A 👋 that rocks back and forth as if waving.
+class _WavingHand extends StatelessWidget {
+  const _WavingHand({required this.controller, this.size = 20});
+
+  final AnimationController controller;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, child) {
+        final angle = math.sin(controller.value * math.pi * 4) * 0.35;
+        return Transform.rotate(
+          angle: angle,
+          alignment: Alignment.bottomCenter,
+          child: child,
+        );
+      },
+      child: Text('👋', style: TextStyle(fontSize: size)),
+    );
+  }
+}
+
+/// Slides a gradient horizontally so its highlight band sweeps across the text.
+class _SlidingGradient extends GradientTransform {
+  const _SlidingGradient(this.slide);
+
+  final double slide;
+
+  @override
+  Matrix4? transform(Rect bounds, {TextDirection? textDirection}) =>
+      Matrix4.translationValues(bounds.width * slide, 0, 0);
 }
 
 /// A thin, custom-drawn chevron (‹ or ›) used to switch months.

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -28,6 +29,7 @@ class CategoryEditorScreen extends ConsumerStatefulWidget {
 class _CategoryEditorScreenState extends ConsumerState<CategoryEditorScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
+  late final TextEditingController _budgetController;
   late int _iconCodePoint;
   late int _colorValue;
 
@@ -63,6 +65,11 @@ class _CategoryEditorScreenState extends ConsumerState<CategoryEditorScreen> {
     super.initState();
     final existing = widget.existing;
     _nameController = TextEditingController(text: existing?.name ?? '');
+    _budgetController = TextEditingController(
+      text: (existing != null && existing.hasBudget)
+          ? _trimAmount(existing.monthlyBudget)
+          : '',
+    );
     _iconCodePoint = existing?.iconCodePoint ??
         AppIcons.codePointOf(
           (widget.kind.isIncome
@@ -100,9 +107,14 @@ class _CategoryEditorScreenState extends ConsumerState<CategoryEditorScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _budgetController.dispose();
     _paletteScroll.dispose();
     super.dispose();
   }
+
+  /// Formats a budget amount without a trailing ".0" (e.g. 5000 → "5000").
+  String _trimAmount(double v) =>
+      v == v.roundToDouble() ? v.toInt().toString() : v.toString();
 
   void _pickColor(Color color, {int? paletteIndex}) {
     setState(() {
@@ -147,6 +159,10 @@ class _CategoryEditorScreenState extends ConsumerState<CategoryEditorScreen> {
       reusable = choice;
     }
 
+    // Budget only applies to expense categories; 0 = no budget.
+    final budget =
+        _isIncome ? 0.0 : (double.tryParse(_budgetController.text.trim()) ?? 0);
+
     final category = Category(
       id: widget.existing?.id ?? const Uuid().v4(),
       name: _nameController.text.trim(),
@@ -154,6 +170,7 @@ class _CategoryEditorScreenState extends ConsumerState<CategoryEditorScreen> {
       iconCodePoint: _iconCodePoint,
       colorValue: _colorValue,
       reusable: reusable,
+      monthlyBudget: budget,
     );
 
     final notifier = ref.read(categoriesProvider.notifier);
@@ -385,6 +402,27 @@ class _CategoryEditorScreenState extends ConsumerState<CategoryEditorScreen> {
                   (value?.trim() ?? '').isEmpty ? 'Please enter a name' : null,
             ),
             const SizedBox(height: AppConstants.spaceL),
+
+            // ---- Monthly budget (expense categories only) ----
+            if (!_isIncome) ...[
+              Text('Monthly budget (optional)',
+                  style: theme.textTheme.labelLarge),
+              const SizedBox(height: AppConstants.spaceS),
+              TextFormField(
+                controller: _budgetController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                ],
+                decoration: const InputDecoration(
+                  hintText: 'e.g. 20000',
+                  prefixText: '₦ ',
+                  helperText: "We'll warn you as you get close to it.",
+                ),
+              ),
+              const SizedBox(height: AppConstants.spaceL),
+            ],
 
             // ---- Icon row ----
             Text('Icon', style: theme.textTheme.labelLarge),

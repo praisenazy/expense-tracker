@@ -24,13 +24,15 @@ class CategoryAdapter extends TypeAdapter<Category> {
       kind: fields[4] as TransactionType,
       // Older records have no field 5 — treat them as reusable.
       reusable: fields[5] as bool? ?? true,
+      // Older records have no field 6 — no budget.
+      monthlyBudget: (fields[6] as num?)?.toDouble() ?? 0,
     );
   }
 
   @override
   void write(BinaryWriter writer, Category obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -42,7 +44,9 @@ class CategoryAdapter extends TypeAdapter<Category> {
       ..writeByte(4)
       ..write(obj.kind)
       ..writeByte(5)
-      ..write(obj.reusable);
+      ..write(obj.reusable)
+      ..writeByte(6)
+      ..write(obj.monthlyBudget);
   }
 
   @override

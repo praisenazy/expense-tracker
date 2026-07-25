@@ -13,6 +13,8 @@ class AppConstants {
   // ---- Keys used inside the settings box ----
   static const String themeModeKey = 'theme_mode';
   static const String themeColorKey = 'theme_color';
+  static const String userNameKey = 'user_name';
+  static const String onboardingDoneKey = 'onboarding_done_v1';
   static const String othersRemovedKey = 'others_removed_v1';
   static const String emojiRepairKey = 'emoji_icons_repaired_v1';
 

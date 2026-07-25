@@ -9,6 +9,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/category.dart';
 import '../../providers/summary_providers.dart';
+import '../../providers/transaction_providers.dart';
 import '../shared/empty_state.dart';
 
 /// Insights screen: an expense/income toggle, a donut chart of the selected
@@ -46,6 +47,149 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
 
   Color _colorFor(int index, int count) => _palette[index % _palette.length];
 
+  /// A short, human insight: the biggest category and how this month compares
+  /// to the last — the chart in words.
+  Widget _insightCard(
+    ThemeData theme,
+    List<MapEntry<Category, double>> entries,
+    double total,
+    double prevTotal,
+  ) {
+    if (entries.isEmpty || total <= 0) return const SizedBox.shrink();
+
+    final top = entries.first;
+    final topPct = (top.value / total * 100).round();
+    final role = _showIncome ? 'top income source' : 'biggest expense';
+
+    // Comparison to last month.
+    final verb = _showIncome ? 'earned' : 'spent';
+    var compColor = theme.colorScheme.onSurface.withValues(alpha: 0.7);
+    IconData? compIcon;
+    String comparison;
+    if (prevTotal <= 0) {
+      comparison = "First month you're tracking this — great start! 🎉";
+    } else {
+      final delta = (total - prevTotal) / prevTotal * 100;
+      if (delta.abs() < 1) {
+        comparison = 'About the same as last month.';
+      } else {
+        final dir = delta < 0 ? 'less' : 'more';
+        final good = _showIncome ? delta > 0 : delta < 0;
+        compColor = good ? _incomeColor : _expenseColor;
+        compIcon = delta < 0
+            ? Icons.trending_down_rounded
+            : Icons.trending_up_rounded;
+        comparison = 'You $verb ${delta.abs().round()}% $dir than last month';
+      }
+    }
+
+    // Loss-framed budget nudge: the most at-risk expense category (≥80% used).
+    // Framing what they're about to overspend motivates more than a gain.
+    MapEntry<Category, double>? risk;
+    var riskRatio = 0.0;
+    if (!_showIncome) {
+      for (final e in entries) {
+        if (!e.key.hasBudget) continue;
+        final r = e.value / e.key.monthlyBudget;
+        if (r >= 0.8 && r > riskRatio) {
+          risk = e;
+          riskRatio = r;
+        }
+      }
+    }
+    final nudge = risk == null
+        ? null
+        : riskRatio > 1.0
+            ? "You're ${Formatters.money(risk.value - risk.key.monthlyBudget)} "
+                'over your ${risk.key.name} budget.'
+            : "You've used ${(riskRatio * 100).round()}% of your "
+                '${risk.key.name} budget.';
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: AppConstants.spaceM),
+      padding: const EdgeInsets.all(AppConstants.spaceM),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(top.key.emoji, style: const TextStyle(fontSize: 18)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    style: theme.textTheme.bodyMedium,
+                    children: [
+                      TextSpan(
+                        text: top.key.name,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      TextSpan(text: ' is your $role — '),
+                      TextSpan(
+                        text: '$topPct%',
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              if (compIcon != null) ...[
+                Icon(compIcon, size: 16, color: compColor),
+                const SizedBox(width: 6),
+              ],
+              Expanded(
+                child: Text(
+                  comparison,
+                  style: TextStyle(
+                    color: compColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (nudge != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  size: 16,
+                  color: riskRatio > 1.0
+                      ? const Color(0xFFE0544C)
+                      : const Color(0xFFF2A93C),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    nudge,
+                    style: TextStyle(
+                      color: riskRatio > 1.0
+                          ? const Color(0xFFE0544C)
+                          : const Color(0xFFF2A93C),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -62,8 +206,22 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
     final entries = map.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
+    // Same side's total for the PREVIOUS month, for a comparison insight.
+    final prevMonth = DateTime(month.year, month.month - 1);
+    var prevTotal = 0.0;
+    for (final t in ref.watch(transactionsProvider)) {
+      if (t.date.year == prevMonth.year &&
+          t.date.month == prevMonth.month &&
+          t.type.isIncome == _showIncome) {
+        prevTotal += t.amount;
+      }
+    }
+
     return Scaffold(
+      // Let content run full-bleed behind the floating nav (like Home); the
+      // list's bottom padding keeps the rows clear of the pill.
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             // ---- Date navigation (arrows close to the label, no clock) ----
@@ -135,13 +293,17 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
               child: entries.isEmpty
                   ? EmptyState(
                       icon: Icons.donut_large_rounded,
-                      title: _showIncome ? 'No income' : 'No expenses',
+                      title: _showIncome
+                          ? 'No income yet this month'
+                          : 'No expenses yet this month',
                       message: _showIncome
-                          ? 'Add income this month to see where it comes from.'
-                          : 'Add expenses this month to see where your money goes.',
+                          ? 'Log some income and watch this chart show exactly '
+                              'where your money comes from.'
+                          : 'Log a few expenses and this chart will show exactly '
+                              'where your money goes.',
                     )
                   : ListView(
-                      padding: const EdgeInsets.only(bottom: 110),
+                      padding: const EdgeInsets.only(bottom: 120),
                       children: [
                         const SizedBox(height: AppConstants.spaceL),
                         _Donut(
@@ -152,6 +314,8 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                               setState(() => _showIncome = !_showIncome),
                         ),
                         const SizedBox(height: AppConstants.spaceL),
+                        _insightCard(theme, entries, total, prevTotal),
+                        const SizedBox(height: AppConstants.spaceM),
                         for (var i = 0; i < entries.length; i++)
                           _CategoryRow(
                             color: _colorFor(i, entries.length),
@@ -166,6 +330,11 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                             amountColor: _showIncome
                                 ? _incomeColor
                                 : _expenseColor,
+                            // Budgets apply to the expense side only.
+                            budget: _showIncome
+                                ? 0
+                                : entries[i].key.monthlyBudget,
+                            spent: entries[i].value,
                           ),
                       ],
                     ),
@@ -502,6 +671,8 @@ class _CategoryRow extends StatelessWidget {
     required this.percent,
     required this.amountText,
     required this.amountColor,
+    this.budget = 0,
+    this.spent = 0,
   });
 
   final Color color;
@@ -511,6 +682,10 @@ class _CategoryRow extends StatelessWidget {
   final String amountText;
   final Color amountColor;
 
+  /// Monthly budget for this category (0 = none) and how much is spent so far.
+  final double budget;
+  final double spent;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -519,9 +694,11 @@ class _CategoryRow extends StatelessWidget {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppConstants.spaceM,
-            vertical: 10,
+          padding: EdgeInsets.fromLTRB(
+            AppConstants.spaceM,
+            10,
+            AppConstants.spaceM,
+            budget > 0 ? 0 : 10,
           ),
           child: Row(
             children: [
@@ -577,8 +754,71 @@ class _CategoryRow extends StatelessWidget {
             ],
           ),
         ),
+        if (budget > 0) _budgetBar(theme, muted),
         const Divider(height: 1, indent: 16, endIndent: 16),
       ],
+    );
+  }
+
+  /// A slim budget progress bar with a loss-framed status line: green while
+  /// there's room, amber past 80%, red when over.
+  Widget _budgetBar(ThemeData theme, Color muted) {
+    const amber = Color(0xFFF2A93C);
+    const red = Color(0xFFE0544C);
+    final ratio = budget <= 0 ? 0.0 : spent / budget;
+    final over = ratio > 1.0;
+    final barColor = over
+        ? red
+        : ratio >= 0.8
+            ? amber
+            : color;
+
+    final status = over
+        ? 'Over by ${Formatters.money(spent - budget)}'
+        : '${Formatters.money(spent)} of ${Formatters.money(budget)} '
+            '• ${(ratio * 100).round()}% used';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.spaceM + 44 + AppConstants.spaceM,
+        4,
+        AppConstants.spaceM,
+        10,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: ratio.clamp(0.0, 1.0),
+              minHeight: 6,
+              backgroundColor:
+                  theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.6,
+              ),
+              valueColor: AlwaysStoppedAnimation(barColor),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              if (over) ...[
+                const Icon(Icons.warning_amber_rounded, size: 13, color: red),
+                const SizedBox(width: 4),
+              ],
+              Text(
+                status,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: over ? FontWeight.w700 : FontWeight.w500,
+                  color: over ? red : muted,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

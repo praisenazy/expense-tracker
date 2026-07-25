@@ -1,19 +1,23 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../providers/user_provider.dart';
+import '../onboarding/onboarding_screen.dart';
 import '../root/root_screen.dart';
 
 /// Animated splash / loading screen shown on launch: a glowing rotating ring,
-/// a progress bar that fills 0→100% over 3 seconds, then routes to Home.
-class SplashScreen extends StatefulWidget {
+/// a progress bar that fills 0→100% over 3 seconds, then routes to onboarding
+/// (first run) or Home.
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
+class _SplashScreenState extends ConsumerState<SplashScreen>
     with TickerProviderStateMixin {
   static const Color _bg = Color(0xFF0A0E1A);
   static const Color _blue = Color(0xFF3B82F6);
@@ -47,10 +51,14 @@ class _SplashScreenState extends State<SplashScreen>
 
   void _goHome() {
     if (!mounted) return;
+    // First run → onboarding; afterwards → straight to Home.
+    final onboarded = ref.read(onboardingCompleteProvider);
+    final Widget destination =
+        onboarded ? const RootScreen() : const OnboardingScreen();
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 450),
-        pageBuilder: (_, _, _) => const RootScreen(),
+        pageBuilder: (_, _, _) => destination,
         transitionsBuilder: (_, animation, _, child) =>
             FadeTransition(opacity: animation, child: child),
       ),

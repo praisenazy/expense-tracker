@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/utils/formatters.dart';
+import '../../data/models/transaction.dart';
 import '../add_edit/add_edit_transaction_screen.dart';
 import '../home/home_screen.dart';
 import '../summary/summary_screen.dart';
@@ -17,10 +19,47 @@ class RootScreen extends StatefulWidget {
 class _RootScreenState extends State<RootScreen> {
   int _index = 0;
 
-  void _openAddTransaction() {
-    Navigator.of(context).push(
+  Future<void> _openAddTransaction() async {
+    final saved = await Navigator.of(context).push<Transaction>(
       MaterialPageRoute(builder: (_) => const AddEditTransactionScreen()),
     );
+    if (saved == null || !mounted) return;
+    _showSavedConfirmation(saved);
+  }
+
+  /// A brief, friendly confirmation after a transaction is added.
+  void _showSavedConfirmation(Transaction t) {
+    final theme = Theme.of(context);
+    final isIncome = t.type.isIncome;
+    final green = const Color(0xFF2BD17E);
+    final sign = isIncome ? '+' : '-';
+    final label = isIncome ? 'Income' : 'Expense';
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+          backgroundColor: theme.colorScheme.inverseSurface,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 86),
+          content: Row(
+            children: [
+              Icon(Icons.check_circle_rounded, color: green, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '$label added  •  $sign${Formatters.money(t.amount)}',
+                  style: TextStyle(
+                    color: theme.colorScheme.onInverseSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
   }
 
   @override
