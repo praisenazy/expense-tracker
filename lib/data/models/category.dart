@@ -21,6 +21,7 @@ class Category {
     required this.colorValue,
     required this.kind,
     this.reusable = true,
+    this.monthlyBudget = 0,
   });
 
   /// Stable unique id (uuid). Transactions reference this.
@@ -50,6 +51,14 @@ class Category {
   @HiveField(5)
   final bool reusable;
 
+  /// Optional monthly spending limit for this (expense) category. 0 means no
+  /// budget set. Used to show a progress bar and loss-framed nudges.
+  @HiveField(6)
+  final double monthlyBudget;
+
+  /// True when a monthly budget has been set for this category.
+  bool get hasBudget => monthlyBudget > 0;
+
   /// The emoji to display, rebuilt from the stored code point.
   String get emoji => String.fromCharCode(iconCodePoint);
 
@@ -63,6 +72,7 @@ class Category {
     int? colorValue,
     TransactionType? kind,
     bool? reusable,
+    double? monthlyBudget,
   }) {
     return Category(
       id: id ?? this.id,
@@ -71,6 +81,7 @@ class Category {
       colorValue: colorValue ?? this.colorValue,
       kind: kind ?? this.kind,
       reusable: reusable ?? this.reusable,
+      monthlyBudget: monthlyBudget ?? this.monthlyBudget,
     );
   }
 }

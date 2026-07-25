@@ -10,6 +10,7 @@ import '../../data/models/category.dart';
 import '../../data/models/transaction.dart';
 import '../../data/models/transaction_type.dart';
 import '../../providers/category_providers.dart';
+import '../../providers/summary_providers.dart';
 import '../../providers/transaction_providers.dart';
 import '../categories/category_editor_screen.dart';
 import '../categories/widgets/category_limit_sheet.dart';
@@ -60,8 +61,20 @@ class _AddEditTransactionScreenState
     );
     _noteController = TextEditingController(text: existing?.note ?? '');
     _type = existing?.type ?? TransactionType.expense;
-    _date = existing?.date ?? DateTime.now();
-    _categoryId = existing?.categoryId ?? _firstCategoryIdFor(_type);
+    _date = existing?.date ?? _defaultDateForNew();
+    _categoryId = existing?.categoryId ?? _smartDefaultCategoryId(_type);
+  }
+
+  /// Default date for a NEW transaction: today when viewing the current month,
+  /// otherwise a day in the month the user is currently browsing — so adding
+  /// while viewing a past month lands the entry in that month (still editable).
+  DateTime _defaultDateForNew() {
+    final now = DateTime.now();
+    final selected = ref.read(selectedMonthProvider); // first day of that month
+    if (selected.year == now.year && selected.month == now.month) return now;
+    // Keep today's day-of-month, clamped to the selected month's length.
+    final lastDay = DateTime(selected.year, selected.month + 1, 0).day;
+    return DateTime(selected.year, selected.month, now.day.clamp(1, lastDay));
   }
 
   @override
@@ -71,10 +84,24 @@ class _AddEditTransactionScreenState
     super.dispose();
   }
 
-  /// The first available category id for a kind, or null if none exist.
-  String? _firstCategoryIdFor(TransactionType kind) {
-    final list = ref.read(categoriesByKindProvider(kind));
-    return list.isEmpty ? null : list.first.id;
+  /// A smart default category for a kind: the one the user picks most often
+  /// (a good default that most users won't need to change), falling back to the
+  /// first available, or null if none exist.
+  String? _smartDefaultCategoryId(TransactionType kind) {
+    final validIds =
+        ref.read(categoriesByKindProvider(kind)).map((c) => c.id).toList();
+    if (validIds.isEmpty) return null;
+
+    final counts = <String, int>{};
+    for (final t in ref.read(transactionsProvider)) {
+      if (t.type == kind && validIds.contains(t.categoryId)) {
+        counts[t.categoryId] = (counts[t.categoryId] ?? 0) + 1;
+      }
+    }
+    if (counts.isEmpty) return validIds.first;
+    final ranked = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return ranked.first.key;
   }
 
   /// Keep the selection valid for the current type (after switching
@@ -83,8 +110,204 @@ class _AddEditTransactionScreenState
     final validIds =
         ref.read(categoriesByKindProvider(_type)).map((c) => c.id).toSet();
     if (_categoryId == null || !validIds.contains(_categoryId)) {
-      _categoryId = _firstCategoryIdFor(_type);
+      _categoryId = _smartDefaultCategoryId(_type);
     }
+  }
+
+  /// The current net balance across all transactions (income − expense).
+  double _netBalance() {
+    var net = 0.0;
+    for (final t in ref.read(transactionsProvider)) {
+      net += t.type.isIncome ? t.amount : -t.amount;
+    }
+    return net;
+  }
+
+  /// The parsed amount currently typed, or null if empty/invalid.
+  double? get _typedAmount {
+    final parsed = double.tryParse(_amountController.text.trim());
+    return (parsed != null && parsed > 0) ? parsed : null;
+  }
+
+  /// Up to [max] recent, distinct, non-empty notes to offer as quick chips.
+  List<String> _recentNotes({int max = 3}) {
+    final seen = <String>{};
+    final result = <String>[];
+    for (final t in ref.read(transactionsProvider)) {
+      final note = t.note?.trim() ?? '';
+      final key = note.toLowerCase();
+      if (note.isEmpty || seen.contains(key)) continue;
+      seen.add(key);
+      result.add(note);
+      if (result.length >= max) break;
+    }
+    return result;
+  }
+
+  /// Formats an int as a Naira amount with thousands separators, e.g. ₦1,000.
+  String _naira(int value) => '₦${value.toString().replaceAllMapped(
+        RegExp(r'\B(?=(\d{3})+(?!\d))'),
+        (m) => ',',
+      )}';
+
+  /// Save button label: shows the amount + type when a valid amount is typed.
+  String _saveLabel() {
+    final amount = _typedAmount;
+    final verb = _isEditing ? 'Update' : 'Save';
+    if (amount == null) {
+      return _isEditing ? 'Save Changes' : 'Save Transaction';
+    }
+    final kind = _type.isIncome ? 'Income' : 'Expense';
+    return '$verb ${Formatters.money(amount)} $kind';
+  }
+
+  /// Tap-to-fill common amounts — faster repeat entry, less friction.
+  Widget _quickAmountChips(ThemeData theme) {
+    const amounts = [500, 1000, 2000, 5000];
+    return SizedBox(
+      height: 36,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          for (final a in amounts) _quickChip(a, theme),
+        ],
+      ),
+    );
+  }
+
+  Widget _quickChip(int amount, ThemeData theme) {
+    final selected = _typedAmount == amount.toDouble();
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: () => setState(() {
+          _amountController.text = amount.toString();
+          _amountController.selection = TextSelection.collapsed(
+            offset: _amountController.text.length,
+          );
+        }),
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: selected
+                ? _accent.withValues(alpha: 0.15)
+                : theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected ? _accent : Colors.transparent,
+            ),
+          ),
+          child: Text(
+            _naira(amount),
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: selected ? _accent : theme.colorScheme.onSurface,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// "Balance after this: ₦X" — instant feedback on how the entry affects the
+  /// wallet (transparency + control). Only shown once a valid amount is typed.
+  Widget _balanceAfterLine(ThemeData theme) {
+    final amount = _typedAmount;
+    if (amount == null) return const SizedBox.shrink();
+
+    // When editing, remove the existing entry from the net first so the preview
+    // reflects the *edited* value, not a double count.
+    var net = _netBalance();
+    final existing = widget.existing;
+    if (existing != null) {
+      net -= existing.type.isIncome ? existing.amount : -existing.amount;
+    }
+    final after = net + (_type.isIncome ? amount : -amount);
+    final negative = after < 0;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, left: 6),
+      child: Row(
+        children: [
+          Icon(
+            Icons.account_balance_wallet_outlined,
+            size: 16,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'Balance after this: ',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+          ),
+          Text(
+            '${negative ? '-' : ''}${Formatters.money(after.abs())}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: negative
+                  ? _expenseColor
+                  : theme.colorScheme.onSurface,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Recent notes offered as tappable chips (recognition over recall). Hidden
+  /// once the user starts typing their own note.
+  Widget _noteSuggestions(ThemeData theme) {
+    if (_noteController.text.trim().isNotEmpty) {
+      return const SizedBox.shrink();
+    }
+    final notes = _recentNotes();
+    if (notes.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppConstants.spaceS, left: 4),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [for (final n in notes) _suggestChip(n, theme)],
+      ),
+    );
+  }
+
+  Widget _suggestChip(String note, ThemeData theme) {
+    return GestureDetector(
+      onTap: () => setState(() {
+        _noteController.text = note;
+        _noteController.selection = TextSelection.collapsed(
+          offset: _noteController.text.length,
+        );
+      }),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color:
+              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.history_rounded,
+              size: 14,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              note,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Opens the editor to create a new category, then selects it. If this side
@@ -266,7 +489,8 @@ class _AddEditTransactionScreenState
       await notifier.add(transaction);
     }
 
-    if (mounted) Navigator.of(context).pop();
+    HapticFeedback.mediumImpact(); // a satisfying confirmation tap
+    if (mounted) Navigator.of(context).pop(transaction);
   }
 
   @override
@@ -351,6 +575,9 @@ class _AddEditTransactionScreenState
                               RegExp(r'^\d*\.?\d{0,2}'),
                             ),
                           ],
+                          // Rebuild so the quick chips, balance preview and Save
+                          // button label update live as the amount changes.
+                          onChanged: (_) => setState(() {}),
                           style: TextStyle(
                             fontSize: 30,
                             fontWeight: FontWeight.w800,
@@ -388,6 +615,11 @@ class _AddEditTransactionScreenState
                 ],
               ),
             ),
+
+            // ---- Quick amounts + "balance after this" preview ----
+            const SizedBox(height: AppConstants.spaceS),
+            _quickAmountChips(theme),
+            _balanceAfterLine(theme),
             const SizedBox(height: AppConstants.spaceM),
 
             // ---- Note (with note icon) ----
@@ -404,6 +636,7 @@ class _AddEditTransactionScreenState
                     child: TextFormField(
                       controller: _noteController,
                       textCapitalization: TextCapitalization.sentences,
+                      onChanged: (_) => setState(() {}),
                       decoration: const InputDecoration(
                         isDense: true,
                         contentPadding: EdgeInsets.zero,
@@ -418,6 +651,7 @@ class _AddEditTransactionScreenState
                 ],
               ),
             ),
+            _noteSuggestions(theme),
             const SizedBox(height: AppConstants.spaceL),
 
             // ---- Category ----
@@ -463,10 +697,11 @@ class _AddEditTransactionScreenState
             ),
             const SizedBox(height: AppConstants.spaceXl),
 
-            // ---- Save (vibrant gradient button) ----
+            // ---- Save (vibrant gradient button) — shows the amount + type so
+            //      the number does the convincing (specificity is trust). ----
             _GradientButton(
               accent: _accent,
-              label: _isEditing ? 'Save Changes' : 'Save Transaction',
+              label: _saveLabel(),
               onTap: _save,
             ),
           ],
