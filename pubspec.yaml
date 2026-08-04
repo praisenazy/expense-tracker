@@ -54,6 +54,24 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   build_runner: ^2.15.0
   hive_ce_generator: ^1.11.1
+  flutter_launcher_icons: ^0.14.4
+
+# Launcher icon generation. Run:  dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  image_path: "assets/icon/launcher_icon.png"
+  # Android adaptive icon so the art fills the whole (rounded) shape instead of
+  # sitting as a small square in the centre. The foreground is the full icon;
+  # the background matches its dark navy so it blends edge-to-edge.
+  min_sdk_android: 21
+  adaptive_icon_background: "#05091A"
+  adaptive_icon_foreground: "assets/icon/launcher_icon.png"
+  web:
+    generate: true
+  windows:
+    generate: true
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

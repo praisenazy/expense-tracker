@@ -27,6 +27,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   late final AnimationController _spin; // continuous ring rotation
   late final AnimationController _wave; // bottom wave motion
   late final AnimationController _progress; // 0→100% over 3s
+  late final AnimationController _heart; // logo heartbeat
+  late final Animation<double> _beat; // lub-dub pulse curve
 
   @override
   void initState() {
@@ -43,6 +45,35 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       vsync: this,
       duration: const Duration(seconds: 3),
     )..forward();
+
+    // Heartbeat: a quick "lub-dub" pump, then a short rest — repeating.
+    _heart = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat();
+    _beat = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 1.18)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 10,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.18, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 10,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 1.10)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 8,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.10, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 8,
+      ),
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 64),
+    ]).animate(_heart);
 
     _progress.addStatusListener((status) {
       if (status == AnimationStatus.completed) _goHome();
@@ -70,6 +101,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _spin.dispose();
     _wave.dispose();
     _progress.dispose();
+    _heart.dispose();
     super.dispose();
   }
 
@@ -96,29 +128,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 children: [
                   const Spacer(flex: 3),
 
-                  // ---- App icon badge ----
-                  Container(
-                    width: 72,
-                    height: 72,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF121A2E),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: _teal.withValues(alpha: 0.35),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _teal.withValues(alpha: 0.25),
-                          blurRadius: 20,
-                        ),
-                      ],
-                    ),
-                    child: _gradientIcon(
-                      Icons.insights_rounded,
-                      size: 40,
-                    ),
-                  ),
+                  // ---- App icon badge (heartbeat + coin sparkles) ----
+                  _heartbeatBadge(),
                   const SizedBox(height: 20),
 
                   // ---- App name ----
@@ -243,6 +254,28 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         end: Alignment.topRight,
       ).createShader(rect),
       child: Icon(icon, size: size, color: Colors.white),
+    );
+  }
+
+  /// The logo badge, pumping like a heartbeat.
+  Widget _heartbeatBadge() {
+    return ScaleTransition(scale: _beat, child: _badge());
+  }
+
+  Widget _badge() {
+    return Container(
+      width: 72,
+      height: 72,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: const Color(0xFF121A2E),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _teal.withValues(alpha: 0.35)),
+        boxShadow: [
+          BoxShadow(color: _teal.withValues(alpha: 0.25), blurRadius: 20),
+        ],
+      ),
+      child: _gradientIcon(Icons.insights_rounded, size: 40),
     );
   }
 }
